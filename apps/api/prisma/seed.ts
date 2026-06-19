@@ -14,7 +14,8 @@
  *
  * Idempotente en desarrollo: limpia las tablas operativas antes de recrear.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type UserRole } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { assertTransition, formatCop, type OrderStatus } from '@lhdv/shared';
 
 const prisma = new PrismaClient();
@@ -53,17 +54,24 @@ async function main(): Promise<void> {
   console.log('🌱 Sembrando datos de desarrollo...');
   await wipeOperationalData();
 
-  // 1. Usuaria dueña del panel
-  const owner = await prisma.user.upsert({
-    where: { email: 'mariana@lahoradelvenado.co' },
-    update: {},
-    create: {
-      name: 'Mariana',
-      email: 'mariana@lahoradelvenado.co',
-      passwordHash: 'CHANGE_ME', // TODO: hash real al implementar auth (Fase 1)
-      role: 'OWNER',
-    },
-  });
+  // 1. Usuarios del panel — uno por rol. Contraseña de desarrollo: lhdv1234
+  const passwordHash = await bcrypt.hash('lhdv1234', 10);
+  const staff: { name: string; email: string; role: UserRole }[] = [
+    { name: 'Mariana', email: 'mariana@lahoradelvenado.co', role: 'OWNER' },
+    { name: 'Cocina', email: 'cocina@lahoradelvenado.co', role: 'KITCHEN' },
+    { name: 'Ventas', email: 'ventas@lahoradelvenado.co', role: 'SALES' },
+    { name: 'Domicilios', email: 'domicilios@lahoradelvenado.co', role: 'DELIVERY' },
+  ];
+  let owner: Awaited<ReturnType<typeof prisma.user.upsert>> | null = null;
+  for (const s of staff) {
+    const u = await prisma.user.upsert({
+      where: { email: s.email },
+      update: { name: s.name, role: s.role, passwordHash, active: true },
+      create: { ...s, passwordHash },
+    });
+    if (s.role === 'OWNER') owner = u;
+  }
+  if (!owner) throw new Error('No se creó la usuaria dueña');
 
   // 2. Catálogo de EJEMPLO — TODO: reemplazar con datos reales de la propietaria
   const torta = await prisma.product.create({
@@ -183,7 +191,8 @@ async function main(): Promise<void> {
   });
 
   console.log('✅ Seed completo.');
-  console.log(`   Dueña:   ${owner.name} <${owner.email}>`);
+  console.log(`   Usuarios: ${staff.map((s) => s.email).join(', ')}`);
+  console.log('   Contraseña (dev): lhdv1234');
   console.log(`   Pedido:  ${order.code} — estado final: ${estado}`);
   console.log(`   Total:   ${formatCop(total)}`);
 }
