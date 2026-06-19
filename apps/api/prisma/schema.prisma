@@ -1,0 +1,269 @@
+// Modelo de datos — La Hora del Venado
+// Importes en COP como enteros de pesos (sin centavos). Ver packages/shared/money.ts
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (PgBouncer) — para la app
+  directUrl = env("DIRECT_URL") // conexión directa — para migraciones
+}
+
+// ─── Enums ────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER // dueña
+  KITCHEN // cocina
+  SALES // ventas
+  DELIVERY // domicilios
+}
+
+enum OrderChannel {
+  WHATSAPP
+  MANUAL
+  RAPPI
+}
+
+// Refleja packages/shared/order-status.ts (mantener en sincronía)
+enum OrderStatus {
+  DRAFT
+  PENDING_CONFIRMATION
+  AWAITING_PAYMENT
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  NEEDS_HUMAN
+}
+
+enum DeliveryType {
+  PICKUP // recoge en el local
+  OWN_COURIER // mensajero propio
+  EXPRESS_APP // Uber / domicilio rápido
+}
+
+enum PaymentProvider {
+  WOMPI
+  BANCOLOMBIA_TRANSFER
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  VOIDED
+}
+
+enum WebhookSource {
+  WHATSAPP
+  WOMPI
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+// ─── Usuarios del panel ───────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdOrders Order[]            @relation("OrderCreatedBy")
+  statusEvents  OrderStatusEvent[]
+}
+
+// ─── Clientes ─────────────────────────────────────────────────
+
+model Customer {
+  id            String    @id @default(cuid())
+  whatsappPhone String    @unique
+  name          String?
+  notes         String?
+  consentAt     DateTime? // Habeas Data (Ley 1581): cuándo aceptó tratamiento de datos
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  orders   Order[]
+  messages ConversationMessage[]
+}
+
+// ─── Catálogo ─────────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String?
+  isSeasonal  Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  variants ProductVariant[]
+}
+
+model ProductVariant {
+  id          String  @id @default(cuid())
+  productId   String
+  name        String // p.ej. "Mediana"
+  weightGrams Int? // peso por tamaño (material pendiente de la propietaria)
+  priceCop    Int
+  active      Boolean @default(true)
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@unique([productId, name])
+}
+
+model Addition {
+  id         String  @id @default(cuid())
+  name       String  @unique
+  priceCop   Int
+  active     Boolean @default(true)
+
+  orderItemAdditions OrderItemAddition[]
+}
+
+// ─── Pedidos ──────────────────────────────────────────────────
+
+model Order {
+  id              String        @id @default(cuid())
+  code            String        @unique // legible: LHDV-0001
+  customerId      String
+  channel         OrderChannel
+  status          OrderStatus   @default(DRAFT)
+  isCustom        Boolean       @default(false) // estándar (bot) vs personalizado (humano)
+  deliveryType    DeliveryType?
+  deliveryDate    DateTime?
+  deliveryAddress String?
+  deliveryZone    String?
+  deliveryCostCop Int           @default(0)
+  subtotalCop     Int           @default(0)
+  totalCop        Int           @default(0)
+  notes           String?
+  createdById     String? // usuario del panel si el pedido es manual
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  customer     Customer           @relation(fields: [customerId], references: [id])
+  createdBy    User?              @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  items        OrderItem[]
+  payments     Payment[]
+  statusEvents OrderStatusEvent[]
+
+  @@index([status])
+  @@index([deliveryDate])
+}
+
+model OrderItem {
+  id               String  @id @default(cuid())
+  orderId          String
+  productVariantId String
+  quantity         Int     @default(1)
+  unitPriceCop     Int // snapshot del precio al momento del pedido
+  customText       String? // letras / diseño
+  notes            String?
+
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant   ProductVariant      @relation(fields: [productVariantId], references: [id])
+  additions OrderItemAddition[]
+}
+
+model OrderItemAddition {
+  id          String @id @default(cuid())
+  orderItemId String
+  additionId  String
+  priceCop    Int // snapshot
+  quantity    Int    @default(1)
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  addition  Addition  @relation(fields: [additionId], references: [id])
+}
+
+// Auditoría de la máquina de estados: cada cambio queda registrado.
+model OrderStatusEvent {
+  id         String       @id @default(cuid())
+  orderId    String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  byUserId   String? // null = sistema (bot, webhook de pago)
+  reason     String?
+  createdAt  DateTime     @default(now())
+
+  order  Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  byUser User? @relation(fields: [byUserId], references: [id])
+
+  @@index([orderId])
+}
+
+// ─── Pagos ────────────────────────────────────────────────────
+
+model Payment {
+  id                String          @id @default(cuid())
+  orderId           String
+  provider          PaymentProvider
+  status            PaymentStatus   @default(PENDING)
+  amountCop         Int
+  providerReference String? // id de transacción en Wompi
+  idempotencyKey    String?         @unique // evita confirmar dos veces el mismo pago
+  rawPayload        Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// ─── Idempotencia de webhooks entrantes (WhatsApp / Wompi) ────
+
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  source      WebhookSource
+  externalId  String // id del evento en el origen
+  payload     Json
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@unique([source, externalId]) // idempotencia: un evento se procesa una sola vez
+}
+
+// ─── Conversaciones (Fase 2) ──────────────────────────────────
+
+model ConversationMessage {
+  id          String           @id @default(cuid())
+  customerId  String
+  direction   MessageDirection
+  waMessageId String?          @unique
+  body        String?
+  raw         Json?
+  createdAt   DateTime         @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+// ─── Cupo por fecha (Fase 2 mínimo, Fase 4 completo) ──────────
+
+model DateCapacity {
+  id        String   @id @default(cuid())
+  date      DateTime @unique @db.Date
+  maxOrders Int?
+  maxUnits  Int?
+  notes     String?
+}

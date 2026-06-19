@@ -1,0 +1,34 @@
+# Infraestructura local de desarrollo.
+# Requiere Docker Desktop. Si no lo tenés, podés usar Neon/Supabase (Postgres)
+# y Upstash (Redis) en la nube — ver README.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lhdv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lhdv
+      POSTGRES_PASSWORD: lhdv
+      POSTGRES_DB: lhdv
+    ports:
+      - "5432:5432"
+    volumes:
+      - lhdv_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lhdv"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: lhdv-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - lhdv_redisdata:/data
+
+volumes:
+  lhdv_pgdata:
+  lhdv_redisdata:
