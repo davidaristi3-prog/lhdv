@@ -98,6 +98,10 @@ del `.env.example`). Para Redis (Fase 2 en adelante) podés usar **Upstash**.
 - **Fase 1 (panel sin IA):** ✅ backend (auth + roles, pedidos, clientes,
   catálogo) y panel Next.js (login, pedidos, alta manual, kanban de cocina,
   clientes, catálogo editable). Pendiente: **importar el Excel** de clientes.
+- **Fase 2 (IA WhatsApp):** 🚧 webhook listo (verificación + firma + idempotencia,
+  ver [guía Meta](docs/whatsapp-meta-setup.md)). Pendiente: el orquestador de IA.
+- **Módulo contable:** ✅ contabilidad de gestión — rentabilidad (ingresos −
+  COGS − gastos), gastos y costeo de recetas (sección **Contabilidad**, solo dueña).
 
 Lo pendiente de la propietaria (pesos por tamaño, precios reales, plantilla de
 conversación) reemplaza los *placeholders* del seed. Ver [PLAN.md](PLAN.md).
