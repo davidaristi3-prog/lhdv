@@ -1,6 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { assertTransition, InvalidTransitionError, type OrderStatus } from '@lhdv/shared';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, UserRole } from '@prisma/client';
+import {
+  assertTransition,
+  InvalidTransitionError,
+  PRODUCTION_STATUSES,
+  type OrderStatus,
+} from '@lhdv/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 
@@ -8,6 +18,8 @@ interface TransitionOptions {
   /** Usuario del panel que ejecuta el cambio. `null` = sistema (bot, webhook). */
   byUserId?: string | null;
   reason?: string;
+  /** Rol del usuario que ejecuta, para aplicar restricciones (Ventas = solo consulta de cocina). */
+  actingRole?: UserRole;
 }
 
 /** Estados que ve el tablero de cocina, en orden de flujo. */
@@ -145,6 +157,14 @@ export class OrdersService {
       if (!order) throw new NotFoundException(`Pedido ${orderId} no existe`);
 
       const from = order.status as OrderStatus;
+
+      // Ventas solo consulta la producción: no puede mover a estados de cocina/entrega.
+      if (opts.actingRole === 'SALES' && PRODUCTION_STATUSES.includes(to)) {
+        throw new ForbiddenException(
+          'Ventas solo puede consultar el estado de producción, no cambiarlo',
+        );
+      }
+
       try {
         assertTransition(from, to);
       } catch (err) {

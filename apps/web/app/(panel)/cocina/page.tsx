@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { OrderStatus } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { useAuth } from '@/lib/auth';
 import { STATUS_LABEL, formatDate } from '@/lib/labels';
 import type { Order } from '@/lib/types';
 
@@ -19,6 +20,8 @@ const FORWARD: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> 
 
 export default function CocinaPage() {
   const { data: orders, loading, error, reload } = useApi<Order[]>('/orders/board');
+  const { user } = useAuth();
+  const readOnly = user?.role === 'SALES';
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function advance(order: Order) {
@@ -40,7 +43,14 @@ export default function CocinaPage() {
 
   return (
     <div>
-      <h1 className="mb-5 text-lg font-semibold">Cocina · qué se produce hoy</h1>
+      <div className="mb-5 flex items-center gap-3">
+        <h1 className="text-lg font-semibold">Cocina · qué se produce hoy</h1>
+        {readOnly && (
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+            Solo consulta
+          </span>
+        )}
+      </div>
       {loading && <p className="text-neutral-500">Cargando…</p>}
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -75,7 +85,7 @@ export default function CocinaPage() {
                             </li>
                           ))}
                         </ul>
-                        {step && (
+                        {step && !readOnly && (
                           <button
                             onClick={() => advance(o)}
                             disabled={busyId === o.id}

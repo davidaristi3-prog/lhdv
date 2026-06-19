@@ -38,6 +38,10 @@ export class OrdersController {
     @Body() dto: TransitionOrderDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.orders.applyTransition(id, dto.to, { byUserId: user.sub, reason: dto.reason });
+    return this.orders.applyTransition(id, dto.to, {
+      byUserId: user.sub,
+      reason: dto.reason,
+      actingRole: user.role,
+    });
   }
 }

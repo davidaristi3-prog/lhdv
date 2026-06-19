@@ -26,6 +26,21 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const TERMINAL_STATUSES: readonly OrderStatus[] = ['DELIVERED', 'CANCELLED'];
 
 /**
+ * Estados de producción/entrega que maneja la cocina. El rol de Ventas los ve
+ * (para informar al cliente) pero NO puede moverlos: solo consulta.
+ */
+export const PRODUCTION_STATUSES: readonly OrderStatus[] = [
+  'IN_PRODUCTION',
+  'READY',
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+];
+
+export function isProductionStatus(status: OrderStatus): boolean {
+  return PRODUCTION_STATUSES.includes(status);
+}
+
+/**
  * Transiciones permitidas. La clave es el estado actual; el valor, los
  * estados a los que puede pasar.
  *

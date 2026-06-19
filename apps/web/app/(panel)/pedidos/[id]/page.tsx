@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { formatCop, nextStatuses } from '@lhdv/shared';
+import { formatCop, nextStatuses, PRODUCTION_STATUSES } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { useAuth } from '@/lib/auth';
 import { StatusBadge } from '@/app/components/StatusBadge';
 import {
   CHANNEL_LABEL,
@@ -19,6 +20,7 @@ import type { Order } from '@/lib/types';
 export default function PedidoDetallePage() {
   const params = useParams<{ id: string }>();
   const { data: order, loading, error, reload } = useApi<Order>(`/orders/${params.id}`);
+  const { user } = useAuth();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -44,7 +46,9 @@ export default function PedidoDetallePage() {
   if (error) return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>;
   if (!order) return null;
 
-  const nexts = nextStatuses(order.status);
+  const nexts = nextStatuses(order.status).filter(
+    (s) => user?.role !== 'SALES' || !PRODUCTION_STATUSES.includes(s),
+  );
   const card = 'rounded-xl bg-white p-5 ring-1 ring-neutral-200';
 
   return (
