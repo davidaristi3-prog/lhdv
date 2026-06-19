@@ -13,6 +13,7 @@ const NAV: { href: string; label: string; roles: Role[] }[] = [
   { href: '/clientes', label: 'Clientes', roles: ['OWNER', 'SALES'] },
   { href: '/catalogo', label: 'Catálogo', roles: ['OWNER'] },
   { href: '/contabilidad', label: 'Contabilidad', roles: ['OWNER'] },
+  { href: '/equipo', label: 'Equipo', roles: ['OWNER'] },
 ];
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
