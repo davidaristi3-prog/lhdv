@@ -11,6 +11,7 @@
     "build": "pnpm -r build",
     "build:shared": "pnpm --filter @lhdv/shared build",
     "dev:api": "pnpm --filter @lhdv/api start:dev",
+    "dev:web": "pnpm --filter @lhdv/web dev",
     "db:generate": "pnpm --filter @lhdv/api generate",
     "db:migrate": "pnpm --filter @lhdv/api migrate",
     "db:seed": "pnpm build:shared && pnpm --filter @lhdv/api db:seed",

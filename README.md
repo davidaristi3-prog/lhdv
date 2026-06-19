@@ -5,9 +5,9 @@ Monorepo del sistema de pedidos. Ver la hoja de ruta en [PLAN.md](PLAN.md).
 ## Stack
 
 - **Backend / worker:** NestJS + Prisma (`apps/api`)
-- **Panel web:** Next.js (`apps/web`) — *pendiente, Fase 1*
+- **Panel web:** Next.js 15 + React 19 + Tailwind v4 (`apps/web`)
 - **Lógica compartida:** máquina de estados del pedido + dinero (`packages/shared`)
-- **Base de datos:** PostgreSQL · **Cola:** Redis (BullMQ) · **Gestor:** pnpm
+- **Base de datos:** PostgreSQL (Neon) · **Cola:** Redis (BullMQ, Fase 2) · **Gestor:** pnpm
 
 ## Estructura
 
@@ -48,9 +48,23 @@ pnpm db:migrate             # crea las tablas (primera migración)
 # 4. Datos de ejemplo + pedido de prueba
 pnpm db:seed
 
-# 5. Levantar la API
+# 5. Levantar la API (una terminal)
 pnpm dev:api                # http://localhost:3001/api/health
+
+# 6. Levantar el panel (otra terminal)
+pnpm dev:web                # http://localhost:3000
 ```
+
+### Credenciales de desarrollo
+
+El seed crea un usuario por rol. Contraseña: **`lhdv1234`**
+
+| Rol | Correo |
+|---|---|
+| Dueña | mariana@lahoradelvenado.co |
+| Cocina | cocina@lahoradelvenado.co |
+| Ventas | ventas@lahoradelvenado.co |
+| Domicilios | domicilios@lahoradelvenado.co |
 
 ### Base de datos — opción A: Docker (local)
 
@@ -80,7 +94,10 @@ del `.env.example`). Para Redis (Fase 2 en adelante) podés usar **Upstash**.
 
 ## Estado actual
 
-**Fase 0 (cimientos)** en curso: monorepo, modelo de datos, máquina de estados
-del pedido y catálogo de ejemplo. Lo pendiente de la propietaria (pesos por
-tamaño, precios reales, plantilla de conversación) reemplaza los *placeholders*
-del seed. Ver [PLAN.md](PLAN.md).
+- **Fase 0 (cimientos):** ✅ monorepo, modelo de datos, máquina de estados, Neon.
+- **Fase 1 (panel sin IA):** ✅ backend (auth + roles, pedidos, clientes,
+  catálogo) y panel Next.js (login, pedidos, alta manual, kanban de cocina,
+  clientes, catálogo editable). Pendiente: **importar el Excel** de clientes.
+
+Lo pendiente de la propietaria (pesos por tamaño, precios reales, plantilla de
+conversación) reemplaza los *placeholders* del seed. Ver [PLAN.md](PLAN.md).
