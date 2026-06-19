@@ -90,3 +90,84 @@ export interface Customer {
   _count?: { orders: number };
   orders?: Order[];
 }
+
+// ─── Contabilidad ─────────────────────────────────────────────
+
+export type ExpenseCategory =
+  | 'INGREDIENTS'
+  | 'RENT'
+  | 'PAYROLL'
+  | 'UTILITIES'
+  | 'DELIVERY'
+  | 'PACKAGING'
+  | 'MARKETING'
+  | 'FEES'
+  | 'OTHER';
+
+export interface Expense {
+  id: string;
+  date: string;
+  category: ExpenseCategory;
+  description: string;
+  amountCop: number;
+  notes: string | null;
+}
+
+export interface Ingredient {
+  id: string;
+  name: string;
+  unit: string;
+  costPerUnitCop: number;
+  active: boolean;
+}
+
+export interface RecipeItem {
+  id: string;
+  ingredientId: string;
+  quantity: number;
+  ingredient: Ingredient;
+}
+
+export interface Recipe {
+  variantId: string;
+  items: RecipeItem[];
+  costCop: number;
+}
+
+export interface Summary {
+  ventas: number;
+  ingresosCop: number;
+  ticketPromedioCop: number;
+  cogsCop: number;
+  gastosCop: number;
+  utilidadBrutaCop: number;
+  utilidadNetaCop: number;
+  margenBrutoPct: number;
+  margenNetoPct: number;
+}
+
+export interface TopProduct {
+  productId: string;
+  name: string;
+  cantidad: number;
+  ingresosCop: number;
+}
+
+export interface TopCustomer {
+  customerId: string;
+  name: string | null;
+  phone: string;
+  pedidos: number;
+  totalCop: number;
+}
+
+export interface MonthSales {
+  mes: number;
+  ingresosCop: number;
+  ventas: number;
+}
+
+export interface ExpenseByCategory {
+  category: ExpenseCategory;
+  totalCop: number;
+}

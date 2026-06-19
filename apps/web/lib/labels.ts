@@ -1,5 +1,5 @@
 import type { OrderStatus } from '@lhdv/shared';
-import type { Channel, DeliveryType, Role } from './types';
+import type { Channel, DeliveryType, ExpenseCategory, Role } from './types';
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   DRAFT: 'Borrador',
@@ -46,6 +46,33 @@ export const ROLE_LABEL: Record<Role, string> = {
   SALES: 'Ventas',
   DELIVERY: 'Domicilios',
 };
+
+export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
+  INGREDIENTS: 'Insumos',
+  RENT: 'Arriendo',
+  PAYROLL: 'Nómina',
+  UTILITIES: 'Servicios',
+  DELIVERY: 'Domicilios',
+  PACKAGING: 'Empaques',
+  MARKETING: 'Marketing',
+  FEES: 'Comisiones',
+  OTHER: 'Otros',
+};
+
+export const MONTHS = [
+  'Ene',
+  'Feb',
+  'Mar',
+  'Abr',
+  'May',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dic',
+];
 
 export function formatDate(iso: string | null): string {
   if (!iso) return '—';
