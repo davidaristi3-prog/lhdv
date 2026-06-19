@@ -57,9 +57,13 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-neutral-500">
+            <Link
+              href="/cuenta"
+              className="rounded-lg px-2 py-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
+              title="Mi cuenta"
+            >
               {user.name} · {ROLE_LABEL[user.role]}
-            </span>
+            </Link>
             <button
               onClick={logout}
               className="rounded-lg px-3 py-1.5 font-medium text-neutral-600 hover:bg-neutral-100"
