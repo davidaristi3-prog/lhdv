@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { CustomersModule } from './customers/customers.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { OrdersModule } from './orders/orders.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { OrdersModule } from './orders/orders.module';
     CustomersModule,
     CatalogModule,
     OrdersModule,
+    WhatsappModule,
   ],
   controllers: [HealthController],
   providers: [
