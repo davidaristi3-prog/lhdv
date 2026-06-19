@@ -83,6 +83,7 @@ model User {
 
   createdOrders Order[]            @relation("OrderCreatedBy")
   statusEvents  OrderStatusEvent[]
+  expenses      Expense[]
 }
 
 // ─── Clientes ─────────────────────────────────────────────────
@@ -123,8 +124,9 @@ model ProductVariant {
   priceCop    Int
   active      Boolean @default(true)
 
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems OrderItem[]
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+  recipeItems RecipeItem[]
 
   @@unique([productId, name])
 }
@@ -266,4 +268,57 @@ model DateCapacity {
   maxOrders Int?
   maxUnits  Int?
   notes     String?
+}
+
+// ─── Contabilidad de gestión ──────────────────────────────────
+
+enum ExpenseCategory {
+  INGREDIENTS // insumos
+  RENT // arriendo
+  PAYROLL // nómina
+  UTILITIES // servicios públicos
+  DELIVERY // domicilios / transporte
+  PACKAGING // empaques
+  MARKETING
+  FEES // comisiones (Wompi, Rappi)
+  OTHER
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  date        DateTime        @db.Date
+  category    ExpenseCategory
+  description String
+  amountCop   Int
+  notes       String?
+  createdById String?
+  createdAt   DateTime        @default(now())
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@index([date])
+  @@index([category])
+}
+
+model Ingredient {
+  id             String  @id @default(cuid())
+  name           String  @unique
+  unit           String // 'g', 'ml', 'unidad'
+  costPerUnitCop Float // costo por unidad base (puede ser fraccional: $/g)
+  active         Boolean @default(true)
+
+  recipeItems RecipeItem[]
+}
+
+// Receta de una presentación: cuánto de cada insumo lleva → permite el costeo.
+model RecipeItem {
+  id               String @id @default(cuid())
+  productVariantId String
+  ingredientId     String
+  quantity         Float // cantidad en la unidad del ingrediente
+
+  variant    ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  ingredient Ingredient     @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([productVariantId, ingredientId])
 }

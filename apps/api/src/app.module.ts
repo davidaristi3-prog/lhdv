@@ -11,6 +11,9 @@ import { CustomersModule } from './customers/customers.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { OrdersModule } from './orders/orders.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { ExpensesModule } from './expenses/expenses.module';
+import { IngredientsModule } from './ingredients/ingredients.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -22,6 +25,9 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     CatalogModule,
     OrdersModule,
     WhatsappModule,
+    ExpensesModule,
+    IngredientsModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
   providers: [
