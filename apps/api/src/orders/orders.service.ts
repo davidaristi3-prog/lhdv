@@ -103,6 +103,7 @@ export class OrdersService {
 
     const deliveryCostCop = dto.deliveryCostCop ?? 0;
     const code = await this.nextOrderCode();
+    const delivery = await this.resolveAddress(customerId, dto);
 
     return this.prisma.order.create({
       data: {
@@ -112,14 +113,17 @@ export class OrdersService {
         isCustom: dto.isCustom ?? false,
         deliveryType: dto.deliveryType,
         deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
-        deliveryAddress: dto.deliveryAddress,
-        deliveryZone: dto.deliveryZone,
+        deliveryAddress: delivery.deliveryAddress,
+        deliveryZone: delivery.deliveryZone,
         deliveryCostCop,
         subtotalCop: subtotal,
         totalCop: subtotal + deliveryCostCop,
         notes: dto.notes,
         customer: { connect: { id: customerId } },
         createdBy: { connect: { id: userId } },
+        ...(delivery.customerAddressId
+          ? { customerAddress: { connect: { id: delivery.customerAddressId } } }
+          : {}),
         items: { create: itemsData },
         statusEvents: {
           create: { toStatus: 'DRAFT', byUserId: userId, reason: 'Pedido creado manualmente' },
@@ -183,6 +187,44 @@ export class OrdersService {
     throw new BadRequestException('Indicá customerId o customerPhone');
   }
 
+  /** Resuelve la dirección: elegida de la agenda, o nueva (con opción de guardarla). */
+  private async resolveAddress(
+    customerId: string,
+    dto: CreateOrderDto,
+  ): Promise<{ deliveryAddress?: string; deliveryZone?: string; customerAddressId?: string }> {
+    if (dto.customerAddressId) {
+      const addr = await this.prisma.customerAddress.findUnique({
+        where: { id: dto.customerAddressId },
+      });
+      if (!addr || addr.customerId !== customerId) {
+        throw new BadRequestException('La dirección seleccionada no pertenece a este cliente');
+      }
+      return {
+        deliveryAddress: addr.address,
+        deliveryZone: addr.zone ?? undefined,
+        customerAddressId: addr.id,
+      };
+    }
+
+    if (dto.deliveryAddress) {
+      let customerAddressId: string | undefined;
+      if (dto.saveAddress) {
+        const created = await this.prisma.customerAddress.create({
+          data: {
+            customerId,
+            address: dto.deliveryAddress,
+            zone: dto.deliveryZone,
+            label: dto.addressLabel,
+          },
+        });
+        customerAddressId = created.id;
+      }
+      return { deliveryAddress: dto.deliveryAddress, deliveryZone: dto.deliveryZone, customerAddressId };
+    }
+
+    return {};
+  }
+
   private async nextOrderCode(): Promise<string> {
     const count = await this.prisma.order.count();
     return `LHDV-${String(count + 1).padStart(4, '0')}`;
@@ -199,6 +241,7 @@ export class OrdersService {
     return {
       customer: true,
       createdBy: { select: { id: true, name: true } },
+      customerAddress: true,
       items: {
         include: {
           variant: { include: { product: true } },

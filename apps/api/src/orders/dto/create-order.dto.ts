@@ -81,6 +81,11 @@ export class CreateOrderDto {
   @IsISO8601()
   deliveryDate?: string;
 
+  // Dirección: por id de la agenda del cliente, o texto nuevo (con opción de guardarlo).
+  @IsOptional()
+  @IsString()
+  customerAddressId?: string;
+
   @IsOptional()
   @IsString()
   deliveryAddress?: string;
@@ -88,6 +93,14 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   deliveryZone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  saveAddress?: boolean;
+
+  @IsOptional()
+  @IsString()
+  addressLabel?: string;
 
   @IsOptional()
   @IsInt()

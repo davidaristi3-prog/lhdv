@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { CreateAddressDto } from './dto/create-address.dto';
 
 @Injectable()
 export class CustomersService {
@@ -25,10 +26,19 @@ export class CustomersService {
     });
   }
 
+  /** Busca un cliente por su teléfono (su identificador natural) con su agenda de direcciones. */
+  lookup(phone: string) {
+    return this.prisma.customer.findUnique({
+      where: { whatsappPhone: phone },
+      include: { addresses: { orderBy: { createdAt: 'asc' } } },
+    });
+  }
+
   async get(id: string) {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
+        addresses: { orderBy: { createdAt: 'asc' } },
         orders: {
           orderBy: { createdAt: 'desc' },
           select: {
@@ -57,5 +67,20 @@ export class CustomersService {
   async update(id: string, dto: UpdateCustomerDto) {
     await this.get(id);
     return this.prisma.customer.update({ where: { id }, data: dto });
+  }
+
+  // ─── Agenda de direcciones ──────────────────────────────────
+
+  async addAddress(customerId: string, dto: CreateAddressDto) {
+    const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+    if (!customer) throw new NotFoundException('Cliente no encontrado');
+    return this.prisma.customerAddress.create({ data: { ...dto, customerId } });
+  }
+
+  async removeAddress(addressId: string) {
+    const address = await this.prisma.customerAddress.findUnique({ where: { id: addressId } });
+    if (!address) throw new NotFoundException('Dirección no encontrada');
+    await this.prisma.customerAddress.delete({ where: { id: addressId } });
+    return { deleted: true };
   }
 }

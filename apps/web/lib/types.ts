@@ -36,6 +36,15 @@ export interface CustomerLite {
   whatsappPhone: string;
 }
 
+export interface CustomerAddress {
+  id: string;
+  customerId: string;
+  label: string | null;
+  address: string;
+  zone: string | null;
+  notes: string | null;
+}
+
 export interface OrderItemAddition {
   id: string;
   priceCop: number;
@@ -71,6 +80,8 @@ export interface Order {
   deliveryDate: string | null;
   deliveryAddress: string | null;
   deliveryZone: string | null;
+  customerAddressId: string | null;
+  customerAddress?: CustomerAddress | null;
   subtotalCop: number;
   totalCop: number;
   deliveryCostCop: number;
@@ -89,6 +100,7 @@ export interface Customer {
   createdAt: string;
   _count?: { orders: number };
   orders?: Order[];
+  addresses?: CustomerAddress[];
 }
 
 // ─── Contabilidad ─────────────────────────────────────────────

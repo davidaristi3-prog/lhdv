@@ -97,8 +97,25 @@ model Customer {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  orders    Order[]
+  messages  ConversationMessage[]
+  addresses CustomerAddress[]
+}
+
+// Agenda de direcciones del cliente (se eligen al crear un pedido).
+model CustomerAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  label      String? // "Casa", "Trabajo", etc. (opcional)
+  address    String
+  zone       String? // zona de domicilio
+  notes      String? // referencias: "dejar en portería", etc.
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   orders   Order[]
-  messages ConversationMessage[]
+
+  @@index([customerId])
 }
 
 // ─── Catálogo ─────────────────────────────────────────────────
@@ -149,11 +166,12 @@ model Order {
   channel         OrderChannel
   status          OrderStatus   @default(DRAFT)
   isCustom        Boolean       @default(false) // estándar (bot) vs personalizado (humano)
-  deliveryType    DeliveryType?
-  deliveryDate    DateTime?
-  deliveryAddress String?
-  deliveryZone    String?
-  deliveryCostCop Int           @default(0)
+  deliveryType      DeliveryType?
+  deliveryDate      DateTime?
+  deliveryAddress   String? // snapshot de la dirección al momento del pedido
+  deliveryZone      String?
+  customerAddressId String? // dirección de la agenda del cliente que se usó (si aplica)
+  deliveryCostCop   Int           @default(0)
   subtotalCop     Int           @default(0)
   totalCop        Int           @default(0)
   notes           String?
@@ -161,11 +179,12 @@ model Order {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  customer     Customer           @relation(fields: [customerId], references: [id])
-  createdBy    User?              @relation("OrderCreatedBy", fields: [createdById], references: [id])
-  items        OrderItem[]
-  payments     Payment[]
-  statusEvents OrderStatusEvent[]
+  customer        Customer           @relation(fields: [customerId], references: [id])
+  createdBy       User?              @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  customerAddress CustomerAddress?   @relation(fields: [customerAddressId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+  payments        Payment[]
+  statusEvents    OrderStatusEvent[]
 
   @@index([status])
   @@index([deliveryDate])

@@ -6,7 +6,7 @@ import { formatCop } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { DELIVERY_LABEL } from '@/lib/labels';
-import type { Addition, DeliveryType, Order, Product } from '@/lib/types';
+import type { Addition, Customer, CustomerAddress, DeliveryType, Order, Product } from '@/lib/types';
 
 interface DraftItem {
   productId: string;
@@ -17,6 +17,7 @@ interface DraftItem {
 }
 
 const emptyItem: DraftItem = { productId: '', variantId: '', quantity: 1, customText: '', additionIds: [] };
+const NEW_ADDRESS = '__new__';
 
 export default function NuevoPedidoPage() {
   const router = useRouter();
@@ -25,15 +26,43 @@ export default function NuevoPedidoPage() {
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerFound, setCustomerFound] = useState<boolean | null>(null);
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>(NEW_ADDRESS);
+
   const [items, setItems] = useState<DraftItem[]>([{ ...emptyItem }]);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('PICKUP');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [addressLabel, setAddressLabel] = useState('');
+  const [saveAddress, setSaveAddress] = useState(true);
   const [deliveryCost, setDeliveryCost] = useState(0);
   const [notes, setNotes] = useState('');
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function lookupCustomer() {
+    if (!customerPhone.trim()) return;
+    try {
+      const found = await api<Customer | undefined>(
+        `/customers/lookup?phone=${encodeURIComponent(customerPhone.trim())}`,
+      );
+      if (found) {
+        setCustomerFound(true);
+        setCustomerName((n) => n || found.name || '');
+        const addrs = found.addresses ?? [];
+        setAddresses(addrs);
+        setSelectedAddressId(addrs.length > 0 ? addrs[0].id : NEW_ADDRESS);
+      } else {
+        setCustomerFound(false);
+        setAddresses([]);
+        setSelectedAddressId(NEW_ADDRESS);
+      }
+    } catch {
+      /* silencioso: si falla la búsqueda, el cliente se crea al guardar */
+    }
+  }
 
   const variantById = useMemo(() => {
     const m = new Map<string, { priceCop: number }>();
@@ -78,6 +107,18 @@ export default function NuevoPedidoPage() {
     if (!customerPhone) return setError('Indicá el WhatsApp del cliente');
     if (items.some((it) => !it.variantId)) return setError('Cada renglón necesita un producto y tamaño');
 
+    const isPickup = deliveryType === 'PICKUP';
+    const usingSaved = !isPickup && selectedAddressId !== '' && selectedAddressId !== NEW_ADDRESS;
+    const deliveryFields = isPickup
+      ? {}
+      : usingSaved
+        ? { customerAddressId: selectedAddressId }
+        : {
+            deliveryAddress: deliveryAddress || undefined,
+            addressLabel: addressLabel || undefined,
+            saveAddress,
+          };
+
     setBusy(true);
     try {
       const order = await api<Order>('/orders', {
@@ -89,9 +130,9 @@ export default function NuevoPedidoPage() {
           isCustom,
           deliveryType,
           deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
-          deliveryAddress: deliveryAddress || undefined,
           deliveryCostCop: Number(deliveryCost || 0),
           notes: notes || undefined,
+          ...deliveryFields,
           items: items.map((it) => ({
             productVariantId: it.variantId,
             quantity: it.quantity,
@@ -109,6 +150,7 @@ export default function NuevoPedidoPage() {
 
   const field = 'w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
   const card = 'rounded-xl bg-white p-5 ring-1 ring-neutral-200';
+  const showNewAddress = selectedAddressId === NEW_ADDRESS || addresses.length === 0;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -121,7 +163,11 @@ export default function NuevoPedidoPage() {
             <input
               placeholder="WhatsApp (+57…)"
               value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
+              onChange={(e) => {
+                setCustomerPhone(e.target.value);
+                setCustomerFound(null);
+              }}
+              onBlur={lookupCustomer}
               className={field}
             />
             <input
@@ -131,6 +177,14 @@ export default function NuevoPedidoPage() {
               className={field}
             />
           </div>
+          {customerFound === true && (
+            <p className="mt-2 text-xs text-emerald-600">
+              ✓ Cliente registrado{addresses.length > 0 ? ` · ${addresses.length} dirección(es) guardada(s)` : ''}
+            </p>
+          )}
+          {customerFound === false && (
+            <p className="mt-2 text-xs text-neutral-400">Cliente nuevo — se creará con este pedido.</p>
+          )}
         </div>
 
         <div className={card}>
@@ -236,14 +290,50 @@ export default function NuevoPedidoPage() {
               onChange={(e) => setDeliveryDate(e.target.value)}
               className={field}
             />
+
             {deliveryType !== 'PICKUP' && (
               <>
-                <input
-                  placeholder="Dirección"
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  className={`col-span-2 ${field}`}
-                />
+                {addresses.length > 0 && (
+                  <select
+                    value={selectedAddressId}
+                    onChange={(e) => setSelectedAddressId(e.target.value)}
+                    className={`col-span-2 ${field}`}
+                  >
+                    {addresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label ? `${a.label} — ` : ''}
+                        {a.address}
+                      </option>
+                    ))}
+                    <option value={NEW_ADDRESS}>➕ Nueva dirección…</option>
+                  </select>
+                )}
+
+                {showNewAddress && (
+                  <>
+                    <input
+                      placeholder="Nueva dirección"
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      className={`col-span-2 ${field}`}
+                    />
+                    <input
+                      placeholder="Etiqueta (Casa, Trabajo…)"
+                      value={addressLabel}
+                      onChange={(e) => setAddressLabel(e.target.value)}
+                      className={field}
+                    />
+                    <label className="flex items-center gap-2 text-sm text-neutral-600">
+                      <input
+                        type="checkbox"
+                        checked={saveAddress}
+                        onChange={(e) => setSaveAddress(e.target.checked)}
+                      />
+                      Guardar esta dirección para el cliente
+                    </label>
+                  </>
+                )}
+
                 <input
                   type="number"
                   min={0}

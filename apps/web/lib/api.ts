@@ -24,6 +24,7 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
     throw new Error(message);
   }
 
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  // Maneja cuerpos vacíos (204, o 200 con null como en /customers/lookup sin resultado).
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
