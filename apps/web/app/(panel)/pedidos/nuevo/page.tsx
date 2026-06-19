@@ -5,8 +5,17 @@ import { useRouter } from 'next/navigation';
 import { formatCop } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { detectZone } from '@/lib/zones';
 import { DELIVERY_LABEL } from '@/lib/labels';
-import type { Addition, Customer, CustomerAddress, DeliveryType, Order, Product } from '@/lib/types';
+import type {
+  Addition,
+  Customer,
+  CustomerAddress,
+  DeliveryType,
+  DeliveryZone,
+  Order,
+  Product,
+} from '@/lib/types';
 
 interface DraftItem {
   productId: string;
@@ -23,6 +32,7 @@ export default function NuevoPedidoPage() {
   const router = useRouter();
   const { data: products } = useApi<Product[]>('/catalog/products');
   const { data: additions } = useApi<Addition[]>('/catalog/additions');
+  const { data: zones } = useApi<DeliveryZone[]>('/delivery-zones');
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -36,12 +46,28 @@ export default function NuevoPedidoPage() {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [addressLabel, setAddressLabel] = useState('');
   const [saveAddress, setSaveAddress] = useState(true);
+  const [selectedZoneId, setSelectedZoneId] = useState('');
+  const [zoneAuto, setZoneAuto] = useState(false);
   const [deliveryCost, setDeliveryCost] = useState(0);
   const [notes, setNotes] = useState('');
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // ─── Zona ───────────────────────────────────────────────────
+  function setZone(id: string, auto: boolean) {
+    setSelectedZoneId(id);
+    setZoneAuto(auto);
+    const z = zones?.find((x) => x.id === id);
+    if (z) setDeliveryCost(z.deliveryCostCop);
+  }
+  function autodetectZone(text: string) {
+    if (!zones) return;
+    const z = detectZone(text, zones);
+    if (z) setZone(z.id, true);
+  }
+
+  // ─── Cliente ────────────────────────────────────────────────
   async function lookupCustomer() {
     if (!customerPhone.trim()) return;
     try {
@@ -53,14 +79,27 @@ export default function NuevoPedidoPage() {
         setCustomerName((n) => n || found.name || '');
         const addrs = found.addresses ?? [];
         setAddresses(addrs);
-        setSelectedAddressId(addrs.length > 0 ? addrs[0].id : NEW_ADDRESS);
+        if (addrs.length > 0) {
+          setSelectedAddressId(addrs[0].id);
+          autodetectZone(addrs[0].zone || addrs[0].address);
+        } else {
+          setSelectedAddressId(NEW_ADDRESS);
+        }
       } else {
         setCustomerFound(false);
         setAddresses([]);
         setSelectedAddressId(NEW_ADDRESS);
       }
     } catch {
-      /* silencioso: si falla la búsqueda, el cliente se crea al guardar */
+      /* silencioso */
+    }
+  }
+
+  function selectSavedAddress(id: string) {
+    setSelectedAddressId(id);
+    if (id !== NEW_ADDRESS) {
+      const a = addresses.find((x) => x.id === id);
+      if (a) autodetectZone(a.zone || a.address);
     }
   }
 
@@ -82,7 +121,10 @@ export default function NuevoPedidoPage() {
       return sum + (v ? v.priceCop * it.quantity + adds : 0);
     }, 0);
   }, [items, variantById, additionById]);
-  const total = subtotal + Number(deliveryCost || 0);
+
+  const isPickup = deliveryType === 'PICKUP';
+  const total = subtotal + (isPickup ? 0 : Number(deliveryCost || 0));
+  const selectedZone = zones?.find((z) => z.id === selectedZoneId);
 
   function updateItem(i: number, patch: Partial<DraftItem>) {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -107,17 +149,20 @@ export default function NuevoPedidoPage() {
     if (!customerPhone) return setError('Indicá el WhatsApp del cliente');
     if (items.some((it) => !it.variantId)) return setError('Cada renglón necesita un producto y tamaño');
 
-    const isPickup = deliveryType === 'PICKUP';
     const usingSaved = !isPickup && selectedAddressId !== '' && selectedAddressId !== NEW_ADDRESS;
     const deliveryFields = isPickup
       ? {}
-      : usingSaved
-        ? { customerAddressId: selectedAddressId }
-        : {
-            deliveryAddress: deliveryAddress || undefined,
-            addressLabel: addressLabel || undefined,
-            saveAddress,
-          };
+      : {
+          deliveryZone: selectedZone?.name,
+          deliveryCostCop: Number(deliveryCost || 0),
+          ...(usingSaved
+            ? { customerAddressId: selectedAddressId }
+            : {
+                deliveryAddress: deliveryAddress || undefined,
+                addressLabel: addressLabel || undefined,
+                saveAddress,
+              }),
+        };
 
     setBusy(true);
     try {
@@ -130,7 +175,6 @@ export default function NuevoPedidoPage() {
           isCustom,
           deliveryType,
           deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
-          deliveryCostCop: Number(deliveryCost || 0),
           notes: notes || undefined,
           ...deliveryFields,
           items: items.map((it) => ({
@@ -157,8 +201,9 @@ export default function NuevoPedidoPage() {
       <h1 className="mb-5 text-lg font-semibold">Nuevo pedido</h1>
 
       <div className="space-y-5">
+        {/* 1 · Cliente */}
         <div className={card}>
-          <h2 className="mb-3 text-sm font-semibold text-neutral-700">Cliente</h2>
+          <h2 className="mb-3 text-sm font-semibold text-neutral-700">1 · Cliente</h2>
           <div className="grid grid-cols-2 gap-3">
             <input
               placeholder="WhatsApp (+57…)"
@@ -179,7 +224,7 @@ export default function NuevoPedidoPage() {
           </div>
           {customerFound === true && (
             <p className="mt-2 text-xs text-emerald-600">
-              ✓ Cliente registrado{addresses.length > 0 ? ` · ${addresses.length} dirección(es) guardada(s)` : ''}
+              ✓ Cliente registrado{addresses.length > 0 ? ` · ${addresses.length} dirección(es)` : ''}
             </p>
           )}
           {customerFound === false && (
@@ -187,9 +232,102 @@ export default function NuevoPedidoPage() {
           )}
         </div>
 
+        {/* 2 · Entrega */}
+        <div className={card}>
+          <h2 className="mb-3 text-sm font-semibold text-neutral-700">2 · Entrega</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <select
+              value={deliveryType}
+              onChange={(e) => setDeliveryType(e.target.value as DeliveryType)}
+              className={field}
+            >
+              {(Object.keys(DELIVERY_LABEL) as DeliveryType[]).map((d) => (
+                <option key={d} value={d}>
+                  {DELIVERY_LABEL[d]}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              className={field}
+            />
+
+            {!isPickup && (
+              <>
+                {addresses.length > 0 && (
+                  <select
+                    value={selectedAddressId}
+                    onChange={(e) => selectSavedAddress(e.target.value)}
+                    className={`col-span-2 ${field}`}
+                  >
+                    {addresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label ? `${a.label} — ` : ''}
+                        {a.address}
+                      </option>
+                    ))}
+                    <option value={NEW_ADDRESS}>➕ Nueva dirección…</option>
+                  </select>
+                )}
+
+                {showNewAddress && (
+                  <>
+                    <input
+                      placeholder="Nueva dirección"
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      onBlur={() => autodetectZone(deliveryAddress)}
+                      className={`col-span-2 ${field}`}
+                    />
+                    <input
+                      placeholder="Etiqueta (Casa, Trabajo…)"
+                      value={addressLabel}
+                      onChange={(e) => setAddressLabel(e.target.value)}
+                      className={field}
+                    />
+                    <label className="flex items-center gap-2 text-sm text-neutral-600">
+                      <input
+                        type="checkbox"
+                        checked={saveAddress}
+                        onChange={(e) => setSaveAddress(e.target.checked)}
+                      />
+                      Guardar esta dirección
+                    </label>
+                  </>
+                )}
+
+                {/* Zona de domicilio */}
+                <div className="col-span-2">
+                  <label className="mb-1 block text-xs text-neutral-500">
+                    Zona de domicilio
+                    {zoneAuto && selectedZone && (
+                      <span className="ml-1 text-emerald-600">· detectada automáticamente</span>
+                    )}
+                  </label>
+                  <select
+                    value={selectedZoneId}
+                    onChange={(e) => setZone(e.target.value, false)}
+                    className={field}
+                  >
+                    <option value="">Elegí la zona…</option>
+                    {zones?.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.name} — {formatCop(z.deliveryCostCop)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 3 · Productos */}
         <div className={card}>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-neutral-700">Productos</h2>
+            <h2 className="text-sm font-semibold text-neutral-700">3 · Productos</h2>
             <button
               onClick={() => setItems((p) => [...p, { ...emptyItem }])}
               className="text-sm font-medium text-blue-700 hover:underline"
@@ -268,110 +406,62 @@ export default function NuevoPedidoPage() {
               );
             })}
           </div>
-        </div>
-
-        <div className={card}>
-          <h2 className="mb-3 text-sm font-semibold text-neutral-700">Entrega</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <select
-              value={deliveryType}
-              onChange={(e) => setDeliveryType(e.target.value as DeliveryType)}
-              className={field}
-            >
-              {(Object.keys(DELIVERY_LABEL) as DeliveryType[]).map((d) => (
-                <option key={d} value={d}>
-                  {DELIVERY_LABEL[d]}
-                </option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={deliveryDate}
-              onChange={(e) => setDeliveryDate(e.target.value)}
-              className={field}
-            />
-
-            {deliveryType !== 'PICKUP' && (
-              <>
-                {addresses.length > 0 && (
-                  <select
-                    value={selectedAddressId}
-                    onChange={(e) => setSelectedAddressId(e.target.value)}
-                    className={`col-span-2 ${field}`}
-                  >
-                    {addresses.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.label ? `${a.label} — ` : ''}
-                        {a.address}
-                      </option>
-                    ))}
-                    <option value={NEW_ADDRESS}>➕ Nueva dirección…</option>
-                  </select>
-                )}
-
-                {showNewAddress && (
-                  <>
-                    <input
-                      placeholder="Nueva dirección"
-                      value={deliveryAddress}
-                      onChange={(e) => setDeliveryAddress(e.target.value)}
-                      className={`col-span-2 ${field}`}
-                    />
-                    <input
-                      placeholder="Etiqueta (Casa, Trabajo…)"
-                      value={addressLabel}
-                      onChange={(e) => setAddressLabel(e.target.value)}
-                      className={field}
-                    />
-                    <label className="flex items-center gap-2 text-sm text-neutral-600">
-                      <input
-                        type="checkbox"
-                        checked={saveAddress}
-                        onChange={(e) => setSaveAddress(e.target.checked)}
-                      />
-                      Guardar esta dirección para el cliente
-                    </label>
-                  </>
-                )}
-
-                <input
-                  type="number"
-                  min={0}
-                  placeholder="Costo del domicilio"
-                  value={deliveryCost || ''}
-                  onChange={(e) => setDeliveryCost(Number(e.target.value))}
-                  className={field}
-                />
-              </>
-            )}
-          </div>
-          <textarea
-            placeholder="Notas del pedido"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className={`mt-3 ${field}`}
-            rows={2}
-          />
           <label className="mt-3 flex items-center gap-2 text-sm text-neutral-600">
             <input type="checkbox" checked={isCustom} onChange={(e) => setIsCustom(e.target.checked)} />
             Pedido personalizado (requiere revisión)
           </label>
         </div>
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
-        <div className="flex items-center justify-between rounded-xl bg-white p-5 ring-1 ring-neutral-200">
-          <div>
-            <p className="text-sm text-neutral-500">Total</p>
-            <p className="text-2xl font-semibold">{formatCop(total)}</p>
+        {/* 4 · Costo de domicilio */}
+        {!isPickup && (
+          <div className={card}>
+            <h2 className="mb-3 text-sm font-semibold text-neutral-700">4 · Costo de domicilio</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                min={0}
+                value={deliveryCost || ''}
+                onChange={(e) => {
+                  setDeliveryCost(Number(e.target.value));
+                  setZoneAuto(false);
+                }}
+                className={`w-40 ${field}`}
+              />
+              {selectedZone && (
+                <span className="text-sm text-neutral-500">
+                  Zona <b>{selectedZone.name}</b> · sugerido {formatCop(selectedZone.deliveryCostCop)}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-neutral-400">
+              Se autocompleta según la zona detectada; podés ajustarlo.
+            </p>
           </div>
-          <button
-            onClick={submit}
-            disabled={busy}
-            className="rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-          >
-            {busy ? 'Creando…' : 'Crear pedido'}
-          </button>
+        )}
+
+        {/* 5 · Total */}
+        <div className={card}>
+          <textarea
+            placeholder="Notas del pedido"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={`mb-4 ${field}`}
+            rows={2}
+          />
+          {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-neutral-500">5 · Total</p>
+              <p className="text-2xl font-semibold">{formatCop(total)}</p>
+            </div>
+            <button
+              onClick={submit}
+              disabled={busy}
+              className="rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {busy ? 'Creando…' : 'Crear pedido'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

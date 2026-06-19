@@ -12,6 +12,7 @@ const NAV: { href: string; label: string; roles: Role[] }[] = [
   { href: '/cocina', label: 'Cocina', roles: ['OWNER', 'KITCHEN', 'SALES'] },
   { href: '/clientes', label: 'Clientes', roles: ['OWNER', 'SALES'] },
   { href: '/catalogo', label: 'Catálogo', roles: ['OWNER'] },
+  { href: '/zonas', label: 'Zonas', roles: ['OWNER'] },
   { href: '/contabilidad', label: 'Contabilidad', roles: ['OWNER'] },
   { href: '/equipo', label: 'Equipo', roles: ['OWNER'] },
 ];

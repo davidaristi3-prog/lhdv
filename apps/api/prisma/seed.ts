@@ -47,8 +47,23 @@ async function wipeOperationalData(): Promise<void> {
   await prisma.productVariant.deleteMany();
   await prisma.product.deleteMany();
   await prisma.dateCapacity.deleteMany();
+  await prisma.deliveryZone.deleteMany();
   await prisma.customer.deleteMany();
 }
+
+// Área Metropolitana del Valle de Aburrá (10 municipios). Costos de EJEMPLO.
+const DELIVERY_ZONES = [
+  { name: 'Medellín', deliveryCostCop: 8000, aliases: ['poblado', 'laureles', 'belen', 'robledo', 'estadio', 'la america', 'castilla', 'manrique', 'aranjuez', 'buenos aires', 'san javier', 'guayabal', 'el centro'] },
+  { name: 'Bello', deliveryCostCop: 10000, aliases: ['niquia', 'madera', 'cabanas'] },
+  { name: 'Itagüí', deliveryCostCop: 10000, aliases: ['itagui', 'santa maria', 'ditaires'] },
+  { name: 'Envigado', deliveryCostCop: 10000, aliases: ['las vegas', 'la paz', 'el dorado', 'la magnolia'] },
+  { name: 'Sabaneta', deliveryCostCop: 12000, aliases: ['aves marias', 'mayorca', 'la doctora'] },
+  { name: 'La Estrella', deliveryCostCop: 13000, aliases: ['ancon', 'pueblo viejo'] },
+  { name: 'Copacabana', deliveryCostCop: 13000, aliases: ['machado', 'la asuncion'] },
+  { name: 'Caldas', deliveryCostCop: 16000, aliases: ['la primavera'] },
+  { name: 'Girardota', deliveryCostCop: 17000, aliases: ['el totumo'] },
+  { name: 'Barbosa', deliveryCostCop: 22000, aliases: ['el hatillo'] },
+];
 
 async function main(): Promise<void> {
   console.log('🌱 Sembrando datos de desarrollo...');
@@ -189,6 +204,9 @@ async function main(): Promise<void> {
       notes: 'Tope de Nochebuena (ejemplo)',
     },
   });
+
+  // 7. Zonas de domicilio del Área Metropolitana
+  await prisma.deliveryZone.createMany({ data: DELIVERY_ZONES });
 
   console.log('✅ Seed completo.');
   console.log(`   Usuarios: ${staff.map((s) => s.email).join(', ')}`);

@@ -289,6 +289,17 @@ model DateCapacity {
   notes     String?
 }
 
+// Zonas de domicilio (Área Metropolitana del Valle de Aburrá). El costo se asigna
+// por zona; `aliases` son barrios/sectores para detectar la zona desde la dirección.
+model DeliveryZone {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  deliveryCostCop Int
+  aliases         String[] @default([])
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
 // ─── Contabilidad de gestión ──────────────────────────────────
 
 enum ExpenseCategory {

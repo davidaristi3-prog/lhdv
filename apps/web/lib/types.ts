@@ -45,6 +45,14 @@ export interface CustomerAddress {
   notes: string | null;
 }
 
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  deliveryCostCop: number;
+  aliases: string[];
+  active: boolean;
+}
+
 export interface OrderItemAddition {
   id: string;
   priceCop: number;
