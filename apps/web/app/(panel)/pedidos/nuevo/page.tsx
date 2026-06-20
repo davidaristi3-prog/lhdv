@@ -52,7 +52,7 @@ export default function NuevoPedidoPage() {
   const [notes, setNotes] = useState('');
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [submitting, setSubmitting] = useState<'draft' | 'cocina' | null>(null);
 
   // ─── Zona ───────────────────────────────────────────────────
   function setZone(id: string, auto: boolean) {
@@ -144,7 +144,7 @@ export default function NuevoPedidoPage() {
     );
   }
 
-  async function submit() {
+  async function submit(confirm: boolean) {
     setError(null);
     if (!customerPhone) return setError('Indicá el WhatsApp del cliente');
     if (items.some((it) => !it.variantId)) return setError('Cada renglón necesita un producto y tamaño');
@@ -164,7 +164,7 @@ export default function NuevoPedidoPage() {
               }),
         };
 
-    setBusy(true);
+    setSubmitting(confirm ? 'cocina' : 'draft');
     try {
       const order = await api<Order>('/orders', {
         method: 'POST',
@@ -173,6 +173,7 @@ export default function NuevoPedidoPage() {
           customerName: customerName || undefined,
           channel: 'MANUAL',
           isCustom,
+          confirm,
           deliveryType,
           deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
           notes: notes || undefined,
@@ -185,10 +186,10 @@ export default function NuevoPedidoPage() {
           })),
         }),
       });
-      router.push(`/pedidos/${order.id}`);
+      router.push(confirm ? '/cocina' : `/pedidos/${order.id}`);
     } catch (e) {
       setError((e as Error).message);
-      setBusy(false);
+      setSubmitting(null);
     }
   }
 
@@ -449,18 +450,27 @@ export default function NuevoPedidoPage() {
             rows={2}
           />
           {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-sm text-neutral-500">5 · Total</p>
               <p className="text-2xl font-semibold">{formatCop(total)}</p>
             </div>
-            <button
-              onClick={submit}
-              disabled={busy}
-              className="rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-            >
-              {busy ? 'Creando…' : 'Crear pedido'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => submit(false)}
+                disabled={submitting !== null}
+                className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+              >
+                {submitting === 'draft' ? 'Guardando…' : 'Guardar borrador'}
+              </button>
+              <button
+                onClick={() => submit(true)}
+                disabled={submitting !== null}
+                className="rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+              >
+                {submitting === 'cocina' ? 'Enviando…' : 'Crear y enviar a cocina'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

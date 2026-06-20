@@ -117,11 +117,15 @@ export class OrdersService {
     const code = await this.nextOrderCode();
     const delivery = await this.resolveAddress(customerId, dto);
 
+    // La persona que toma el pedido decide: mandarlo directo a cocina (CONFIRMED)
+    // o dejarlo en borrador para terminar de armarlo.
+    const initialStatus: OrderStatus = dto.confirm ? 'CONFIRMED' : 'DRAFT';
+
     return this.prisma.order.create({
       data: {
         code,
         channel: dto.channel,
-        status: 'DRAFT',
+        status: initialStatus,
         isCustom: dto.isCustom ?? false,
         deliveryType: dto.deliveryType,
         deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
@@ -138,7 +142,13 @@ export class OrdersService {
           : {}),
         items: { create: itemsData },
         statusEvents: {
-          create: { toStatus: 'DRAFT', byUserId: userId, reason: 'Pedido creado manualmente' },
+          create: {
+            toStatus: initialStatus,
+            byUserId: userId,
+            reason: dto.confirm
+              ? 'Creado y enviado a cocina manualmente'
+              : 'Pedido creado manualmente',
+          },
         },
       },
       include: this.fullInclude(),

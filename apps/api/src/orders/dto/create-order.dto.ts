@@ -110,4 +110,13 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  /**
+   * Entrada manual: si es `true`, el pedido nace ya CONFIRMADO y aparece en el
+   * tablero de cocina al instante. Si es `false`/ausente, queda en borrador para
+   * terminar de armarlo. (El bot de WhatsApp nunca lo manda: siempre arma borrador.)
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirm?: boolean;
 }
