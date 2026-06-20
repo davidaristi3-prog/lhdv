@@ -1,5 +1,6 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './health/health.controller';
@@ -17,10 +18,12 @@ import { ReportsModule } from './reports/reports.module';
 import { DeliveryZonesModule } from './delivery-zones/delivery-zones.module';
 import { GeocodingModule } from './geocoding/geocoding.module';
 import { RoutesModule } from './routes/routes.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -34,6 +37,7 @@ import { RoutesModule } from './routes/routes.module';
     DeliveryZonesModule,
     GeocodingModule,
     RoutesModule,
+    MaintenanceModule,
   ],
   controllers: [HealthController],
   providers: [
