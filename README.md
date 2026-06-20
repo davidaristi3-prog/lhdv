@@ -102,6 +102,12 @@ del `.env.example`). Para Redis (Fase 2 en adelante) podés usar **Upstash**.
   ver [guía Meta](docs/whatsapp-meta-setup.md)). Pendiente: el orquestador de IA.
 - **Módulo contable:** ✅ contabilidad de gestión — rentabilidad (ingresos −
   COGS − gastos), gastos y costeo de recetas (sección **Contabilidad**, solo dueña).
+- **Zonas de domicilio:** ✅ municipios del Área Metropolitana con costo por zona
+  y autodetección desde la dirección (sección **Zonas**).
+- **Módulo de domicilios:** ✅ geocoding (OpenStreetMap), rutas ordenadas por
+  cercanía con mapa (sección **Domicilios**), y app del domiciliario (**Mi ruta**)
+  con navegación, foto de evidencia y ubicación en vivo. Construido con servicios
+  gratuitos; upgrades opcionales: Google Maps (rutas óptimas), nube (fotos).
 
 Lo pendiente de la propietaria (pesos por tamaño, precios reales, plantilla de
 conversación) reemplaza los *placeholders* del seed. Ver [PLAN.md](PLAN.md).
