@@ -1,0 +1,26 @@
+# Render Blueprint — API de La Hora del Venado (NestJS).
+# El panel (Next.js) se despliega aparte en Vercel. Ver DEPLOY.md.
+services:
+  - type: web
+    name: lhdv-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build:shared && pnpm --filter @lhdv/api exec prisma generate && pnpm --filter @lhdv/api build
+    startCommand: pnpm --filter @lhdv/api exec prisma migrate deploy && node apps/api/dist/main.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Pegá estas dos desde Neon (las mismas de tu .env local):
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # Ubicación del local (ajustá a la real cuando la tengas):
+      - key: BAKERY_LAT
+        value: "6.2442"
+      - key: BAKERY_LNG
+        value: "-75.5812"
