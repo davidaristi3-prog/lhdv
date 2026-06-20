@@ -98,10 +98,18 @@ export default function MiRutaPage() {
           const addr = o.customerAddress?.address ?? o.deliveryAddress ?? '';
           const phone = o.customer.whatsappPhone;
           const wa = phone.replace(/[^0-9]/g, '');
-          const navHref =
-            o.customerAddress?.lat != null && o.customerAddress?.lng != null
-              ? `https://www.google.com/maps/dir/?api=1&destination=${o.customerAddress.lat},${o.customerAddress.lng}`
-              : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`;
+          const lat = o.customerAddress?.lat;
+          const lng = o.customerAddress?.lng;
+          const ll = lat != null && lng != null ? `${lat},${lng}` : null;
+          // Destinos de navegación: usa coordenadas si la dirección está geocodificada.
+          const mapsHref = `https://www.google.com/maps/dir/?api=1&destination=${ll ?? encodeURIComponent(addr)}`;
+          const wazeHref = ll
+            ? `https://waze.com/ul?ll=${ll}&navigate=yes`
+            : `https://waze.com/ul?q=${encodeURIComponent(addr)}&navigate=yes`;
+          // geo: → en Android despliega el selector de apps de mapas instaladas.
+          const geoHref = ll ? `geo:${ll}?q=${ll}` : `geo:0,0?q=${encodeURIComponent(addr)}`;
+          const actionBtn =
+            'rounded-lg border border-neutral-300 py-2 text-center text-sm font-medium hover:bg-neutral-50';
           return (
             <div
               key={o.id}
@@ -124,50 +132,52 @@ export default function MiRutaPage() {
               </div>
 
               {!done && (
-                <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                  <a
-                    href={navHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-lg border border-neutral-300 py-2 text-center font-medium hover:bg-neutral-50"
-                  >
-                    Navegar
-                  </a>
-                  <a
-                    href={`tel:${phone}`}
-                    className="rounded-lg border border-neutral-300 py-2 text-center font-medium hover:bg-neutral-50"
-                  >
-                    Llamar
-                  </a>
-                  <a
-                    href={`https://wa.me/${wa}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-lg border border-neutral-300 py-2 text-center font-medium hover:bg-neutral-50"
-                  >
-                    WhatsApp
-                  </a>
-                  <label className="col-span-2 cursor-pointer rounded-lg bg-neutral-900 py-2 text-center font-medium text-white hover:bg-neutral-800">
-                    {busyId === o.id ? 'Subiendo…' : '📷 Entregar con foto'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
+                <div className="mt-3 space-y-2">
+                  {/* Navegación: cada quien abre la app que tenga */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <a href={mapsHref} target="_blank" rel="noreferrer" className={actionBtn}>
+                      Maps
+                    </a>
+                    <a href={wazeHref} target="_blank" rel="noreferrer" className={actionBtn}>
+                      Waze
+                    </a>
+                    <a href={geoHref} className={actionBtn}>
+                      Otra app
+                    </a>
+                  </div>
+                  {/* Contacto */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <a href={`tel:${phone}`} className={actionBtn}>
+                      Llamar
+                    </a>
+                    <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className={actionBtn}>
+                      WhatsApp
+                    </a>
+                  </div>
+                  {/* Entrega */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="col-span-2 cursor-pointer rounded-lg bg-neutral-900 py-2 text-center text-sm font-medium text-white hover:bg-neutral-800">
+                      {busyId === o.id ? 'Subiendo…' : '📷 Entregar con foto'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        disabled={busyId === o.id}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void deliver(o, f);
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => deliver(o)}
                       disabled={busyId === o.id}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void deliver(o, f);
-                      }}
-                    />
-                  </label>
-                  <button
-                    onClick={() => deliver(o)}
-                    disabled={busyId === o.id}
-                    className="rounded-lg border border-neutral-300 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
-                  >
-                    Sin foto
-                  </button>
+                      className={`${actionBtn} disabled:opacity-50`}
+                    >
+                      Sin foto
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

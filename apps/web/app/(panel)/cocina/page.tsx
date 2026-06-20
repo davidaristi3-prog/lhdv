@@ -71,20 +71,33 @@ export default function CocinaPage() {
                     const step = FORWARD[o.status];
                     return (
                       <div key={o.id} className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-neutral-200">
-                        <div className="flex items-center justify-between">
-                          <Link href={`/pedidos/${o.id}`} className="text-sm font-medium text-blue-700 hover:underline">
+                        {/* Encabezado secundario: código + fecha (pequeño, tenue) */}
+                        <div className="flex items-center justify-between text-xs text-neutral-400">
+                          <Link href={`/pedidos/${o.id}`} className="font-medium text-blue-600 hover:underline">
                             {o.code}
                           </Link>
-                          <span className="text-xs text-neutral-400">{formatDate(o.deliveryDate)}</span>
+                          <span>{formatDate(o.deliveryDate)}</span>
                         </div>
-                        <p className="text-xs text-neutral-500">{o.customer.name ?? o.customer.whatsappPhone}</p>
-                        <ul className="mt-1.5 space-y-0.5 text-xs text-neutral-600">
+
+                        {/* Lo que se produce: protagonista de la tarjeta */}
+                        <ul className="mt-2 space-y-1.5">
                           {o.items.map((it) => (
-                            <li key={it.id}>
-                              {it.quantity}× {it.variant.product.name} · {it.variant.name}
+                            <li key={it.id} className="flex items-baseline gap-2 leading-tight">
+                              <span className="text-xl font-bold tabular-nums text-neutral-900">
+                                {it.quantity}×
+                              </span>
+                              <span className="text-base font-semibold text-neutral-900">
+                                {it.variant.product.name}
+                                <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
+                              </span>
                             </li>
                           ))}
                         </ul>
+
+                        {/* Cliente: secundario */}
+                        <p className="mt-2 text-xs text-neutral-400">
+                          {o.customer.name ?? o.customer.whatsappPhone}
+                        </p>
                         {step && !readOnly && (
                           <button
                             onClick={() => advance(o)}
