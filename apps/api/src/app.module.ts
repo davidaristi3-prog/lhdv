@@ -15,6 +15,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { IngredientsModule } from './ingredients/ingredients.module';
 import { ReportsModule } from './reports/reports.module';
 import { DeliveryZonesModule } from './delivery-zones/delivery-zones.module';
+import { GeocodingModule } from './geocoding/geocoding.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { DeliveryZonesModule } from './delivery-zones/delivery-zones.module';
     IngredientsModule,
     ReportsModule,
     DeliveryZonesModule,
+    GeocodingModule,
   ],
   controllers: [HealthController],
   providers: [

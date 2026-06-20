@@ -84,6 +84,7 @@ model User {
   createdOrders Order[]            @relation("OrderCreatedBy")
   statusEvents  OrderStatusEvent[]
   expenses      Expense[]
+  courierRoutes DeliveryRoute[]    @relation("CourierRoutes")
 }
 
 // ─── Clientes ─────────────────────────────────────────────────
@@ -104,13 +105,16 @@ model Customer {
 
 // Agenda de direcciones del cliente (se eligen al crear un pedido).
 model CustomerAddress {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   customerId String
   label      String? // "Casa", "Trabajo", etc. (opcional)
   address    String
   zone       String? // zona de domicilio
   notes      String? // referencias: "dejar en portería", etc.
-  createdAt  DateTime @default(now())
+  lat        Float? // coordenadas geocodificadas (OpenStreetMap)
+  lng        Float?
+  geocodedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   orders   Order[]
@@ -172,6 +176,10 @@ model Order {
   deliveryZone      String?
   customerAddressId String? // dirección de la agenda del cliente que se usó (si aplica)
   deliveryCostCop   Int           @default(0)
+  routeId           String? // ruta de domicilio a la que pertenece
+  routeSeq          Int? // posición dentro de la ruta (orden de entrega)
+  deliveredAt       DateTime?
+  deliveryPhotoPath String? // foto de evidencia de entrega
   subtotalCop     Int           @default(0)
   totalCop        Int           @default(0)
   notes           String?
@@ -182,6 +190,7 @@ model Order {
   customer        Customer           @relation(fields: [customerId], references: [id])
   createdBy       User?              @relation("OrderCreatedBy", fields: [createdById], references: [id])
   customerAddress CustomerAddress?   @relation(fields: [customerAddressId], references: [id], onDelete: SetNull)
+  route           DeliveryRoute?     @relation(fields: [routeId], references: [id], onDelete: SetNull)
   items           OrderItem[]
   payments        Payment[]
   statusEvents    OrderStatusEvent[]
@@ -298,6 +307,29 @@ model DeliveryZone {
   aliases         String[] @default([])
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())
+}
+
+enum RouteStatus {
+  DRAFT // armándose
+  IN_PROGRESS // domiciliario en ruta
+  DONE // todas las entregas cerradas
+}
+
+// Ruta de domicilios: agrupa pedidos para un domiciliario, en orden de entrega.
+model DeliveryRoute {
+  id         String      @id @default(cuid())
+  date       DateTime    @db.Date
+  courierId  String?
+  status     RouteStatus @default(DRAFT)
+  courierLat Float? // última posición reportada del domiciliario
+  courierLng Float?
+  courierAt  DateTime?
+  createdAt  DateTime    @default(now())
+
+  courier User?   @relation("CourierRoutes", fields: [courierId], references: [id])
+  orders  Order[]
+
+  @@index([date])
 }
 
 // ─── Contabilidad de gestión ──────────────────────────────────
