@@ -7,6 +7,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Fotos de evidencia (almacenamiento local)
+uploads/
+
 # Next.js
 .next/
 out/

@@ -1,10 +1,22 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'node:path';
 import { UserRole } from '@prisma/client';
 import { RoutesService } from './routes.service';
 import { CreateRouteDto, DeliveredDto, LocationDto } from './dto/route.dto';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload } from '../auth/jwt-payload.interface';
+import { UPLOADS_DIR } from '../common/uploads';
 
 @Controller('routes')
 export class RoutesController {
@@ -66,5 +78,32 @@ export class RoutesController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.routes.markDelivered(orderId, { userId: user.sub, role: user.role, notes: dto.notes });
+  }
+
+  /** Marca entregado adjuntando la foto de evidencia (multipart, campo "photo"). */
+  @Roles(UserRole.OWNER, UserRole.DELIVERY)
+  @Post('orders/:orderId/deliver-photo')
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: diskStorage({
+        destination: UPLOADS_DIR,
+        filename: (_req, file, cb) =>
+          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname) || '.jpg'}`),
+      }),
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  deliverWithPhoto(
+    @Param('orderId') orderId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() dto: DeliveredDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.routes.markDelivered(orderId, {
+      userId: user.sub,
+      role: user.role,
+      notes: dto.notes,
+      photoPath: file ? `/uploads/${file.filename}` : undefined,
+    });
   }
 }
