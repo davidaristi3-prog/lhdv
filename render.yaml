@@ -6,7 +6,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build:shared && pnpm --filter @lhdv/api exec prisma generate && pnpm --filter @lhdv/api build
+    buildCommand: pnpm install --frozen-lockfile && pnpm build:shared && pnpm --filter @lhdv/api exec prisma generate && pnpm --filter @lhdv/api build
     startCommand: pnpm --filter @lhdv/api exec prisma migrate deploy && node apps/api/dist/main.js
     healthCheckPath: /api/health
     envVars:
