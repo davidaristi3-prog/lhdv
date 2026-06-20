@@ -43,6 +43,8 @@ export interface CustomerAddress {
   address: string;
   zone: string | null;
   notes: string | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface DeliveryZone {
@@ -90,6 +92,10 @@ export interface Order {
   deliveryZone: string | null;
   customerAddressId: string | null;
   customerAddress?: CustomerAddress | null;
+  routeId?: string | null;
+  routeSeq?: number | null;
+  deliveredAt?: string | null;
+  deliveryPhotoPath?: string | null;
   subtotalCop: number;
   totalCop: number;
   deliveryCostCop: number;
@@ -190,4 +196,22 @@ export interface MonthSales {
 export interface ExpenseByCategory {
   category: ExpenseCategory;
   totalCop: number;
+}
+
+// ─── Domicilios ───────────────────────────────────────────────
+
+export type RouteStatus = 'DRAFT' | 'IN_PROGRESS' | 'DONE';
+
+export interface DeliveryRoute {
+  id: string;
+  date: string;
+  status: RouteStatus;
+  courierId: string | null;
+  courierLat: number | null;
+  courierLng: number | null;
+  courierAt: string | null;
+  createdAt: string;
+  courier?: { id: string; name: string } | null;
+  orders: Order[];
+  _count?: { orders: number };
 }

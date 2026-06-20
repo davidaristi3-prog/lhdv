@@ -1,4 +1,6 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+/** Origen del backend sin el sufijo /api (para servir archivos como /uploads/...). */
+export const API_ORIGIN = API_BASE.replace(/\/api\/?$/, '');
 
 export function getToken(): string | null {
   return typeof window !== 'undefined' ? localStorage.getItem('lhdv_token') : null;

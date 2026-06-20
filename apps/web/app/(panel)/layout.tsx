@@ -10,6 +10,8 @@ import type { Role } from '@/lib/types';
 const NAV: { href: string; label: string; roles: Role[] }[] = [
   { href: '/pedidos', label: 'Pedidos', roles: ['OWNER', 'SALES', 'KITCHEN', 'DELIVERY'] },
   { href: '/cocina', label: 'Cocina', roles: ['OWNER', 'KITCHEN', 'SALES'] },
+  { href: '/domicilios', label: 'Domicilios', roles: ['OWNER'] },
+  { href: '/mi-ruta', label: 'Mi ruta', roles: ['OWNER', 'DELIVERY'] },
   { href: '/clientes', label: 'Clientes', roles: ['OWNER', 'SALES'] },
   { href: '/catalogo', label: 'Catálogo', roles: ['OWNER'] },
   { href: '/zonas', label: 'Zonas', roles: ['OWNER'] },
