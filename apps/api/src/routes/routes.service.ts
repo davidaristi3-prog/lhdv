@@ -99,6 +99,83 @@ export class RoutesService {
     });
   }
 
+  /**
+   * Sugiere a qué domiciliario asignar cada pedido por enrutar: por la zona del
+   * pedido (la cubre quien tiene tarifa en ella) y respetando su capacidad. Solo
+   * lectura — devuelve una propuesta agrupada que el operador edita y confirma.
+   */
+  async suggestAssignments() {
+    const orders = await this.prisma.order.findMany({
+      where: { routeId: null, deliveryType: { not: 'PICKUP' }, status: { in: ROUTABLE } },
+      orderBy: [{ deliveryDate: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        customer: { select: { id: true, name: true, whatsappPhone: true } },
+        customerAddress: true,
+        items: { select: { quantity: true, variant: { select: { capacityLoad: true } } } },
+      },
+    });
+
+    const couriers = await this.prisma.user.findMany({
+      where: { role: 'DELIVERY', active: true },
+      select: {
+        id: true,
+        name: true,
+        capacityLimit: true,
+        zoneRates: { select: { payCop: true, zone: { select: { name: true, aliases: true } } } },
+      },
+    });
+
+    // Índice: nombre/alias de zona (minúsculas) -> domiciliarios que la cubren.
+    type Cand = { id: string; name: string; capacityLimit: number | null; payCop: number };
+    const byZone = new Map<string, Cand[]>();
+    for (const c of couriers) {
+      for (const zr of c.zoneRates) {
+        for (const k of [zr.zone.name, ...zr.zone.aliases].map((x) => x.toLowerCase())) {
+          const arr = byZone.get(k) ?? [];
+          arr.push({ id: c.id, name: c.name, capacityLimit: c.capacityLimit, payCop: zr.payCop });
+          byZone.set(k, arr);
+        }
+      }
+    }
+
+    const assigned = new Map<string, number>(); // courierId -> carga acumulada
+    const groups = new Map<
+      string,
+      { courier: Omit<Cand, 'payCop'>; orders: unknown[]; totalLoad: number }
+    >();
+    const unassigned: { order: unknown; load: number; reason: string }[] = [];
+
+    for (const o of orders) {
+      const load = o.items.reduce((s, it) => s + it.quantity * (it.variant.capacityLoad ?? 1), 0);
+      const candidates = byZone.get((o.deliveryZone ?? '').toLowerCase()) ?? [];
+      const fit = candidates.filter(
+        (c) => c.capacityLimit == null || (assigned.get(c.id) ?? 0) + load <= c.capacityLimit,
+      );
+      if (fit.length === 0) {
+        unassigned.push({
+          order: o,
+          load,
+          reason: candidates.length ? 'sin_capacidad' : 'zona_sin_domiciliario',
+        });
+        continue;
+      }
+      // Desempate: reparte parejo (menor carga ya asignada primero).
+      fit.sort((a, b) => (assigned.get(a.id) ?? 0) - (assigned.get(b.id) ?? 0));
+      const chosen = fit[0];
+      assigned.set(chosen.id, (assigned.get(chosen.id) ?? 0) + load);
+      const g = groups.get(chosen.id) ?? {
+        courier: { id: chosen.id, name: chosen.name, capacityLimit: chosen.capacityLimit },
+        orders: [],
+        totalLoad: 0,
+      };
+      g.orders.push({ ...o, suggestedLoad: load, suggestedPayCop: chosen.payCop });
+      g.totalLoad += load;
+      groups.set(chosen.id, g);
+    }
+
+    return { groups: Array.from(groups.values()), unassigned };
+  }
+
   async get(id: string) {
     const route = await this.prisma.deliveryRoute.findUnique({ where: { id }, include: routeInclude });
     if (!route) throw new NotFoundException('Ruta no encontrada');
@@ -185,7 +262,10 @@ export class RoutesService {
     orderId: string,
     opts: { userId: string; role: UserRole; photoPath?: string; notes?: string },
   ) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { route: { select: { courierId: true } } },
+    });
     if (!order) throw new NotFoundException('Pedido no encontrado');
 
     await this.orders.applyTransition(orderId, 'DELIVERED', {
@@ -193,9 +273,36 @@ export class RoutesService {
       actingRole: opts.role,
       reason: opts.notes ?? 'Entregado',
     });
+
+    // Snapshot del pago al domiciliario: quién entregó + tarifa de su zona.
+    // Si no hay courier en la ruta o no hay tarifa configurada, queda null (no
+    // bloquea la entrega; la liquidación lo marca como tarifa sin definir).
+    const courierId = order.route?.courierId ?? null;
+    let courierPayCop: number | null = null;
+    if (courierId && order.deliveryZone) {
+      const zone = await this.prisma.deliveryZone.findFirst({
+        where: {
+          OR: [{ name: order.deliveryZone }, { aliases: { has: order.deliveryZone.toLowerCase() } }],
+        },
+        select: { id: true },
+      });
+      if (zone) {
+        const rate = await this.prisma.courierZoneRate.findUnique({
+          where: { courierId_zoneId: { courierId, zoneId: zone.id } },
+          select: { payCop: true },
+        });
+        courierPayCop = rate?.payCop ?? null;
+      }
+    }
+
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { deliveredAt: new Date(), deliveryPhotoPath: opts.photoPath ?? undefined },
+      data: {
+        deliveredAt: new Date(),
+        deliveryPhotoPath: opts.photoPath ?? undefined,
+        deliveredByCourierId: courierId ?? undefined,
+        courierPayCop: courierPayCop ?? undefined,
+      },
     });
 
     if (order.routeId) {

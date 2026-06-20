@@ -49,7 +49,7 @@ export default function EquipoPage() {
 
   return (
     <div>
-      <h1 className="mb-5 text-lg font-semibold">Equipo</h1>
+      <h1 className="mb-5 text-lg font-semibold">Usuarios</h1>
 
       <div className="mb-6 rounded-xl bg-white p-4 ring-1 ring-neutral-200">
         <p className="mb-3 text-sm font-semibold text-neutral-700">Agregar usuario</p>

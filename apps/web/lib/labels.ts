@@ -1,5 +1,13 @@
 import type { OrderStatus } from '@lhdv/shared';
-import type { Channel, DeliveryType, ExpenseCategory, Role } from './types';
+import type {
+  Channel,
+  CourierVehicle,
+  DeliveryType,
+  ExpenseCategory,
+  Role,
+  SettlementPeriod,
+  SettlementStatus,
+} from './types';
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   DRAFT: 'Borrador',
@@ -92,3 +100,26 @@ export function formatDateTime(iso: string | null): string {
     minute: '2-digit',
   });
 }
+
+export const VEHICLE_LABEL: Record<CourierVehicle, string> = {
+  MOTO: 'Moto',
+  CARRO: 'Carro',
+};
+
+export const SETTLEMENT_STATUS_LABEL: Record<SettlementStatus, string> = {
+  PENDING: 'Pendiente',
+  PAID: 'Pagada',
+};
+
+export const SETTLEMENT_STATUS_STYLE: Record<SettlementStatus, string> = {
+  PENDING: 'bg-amber-100 text-amber-800',
+  PAID: 'bg-emerald-100 text-emerald-800',
+};
+
+export const SETTLEMENT_PERIOD_LABEL: Record<SettlementPeriod, string> = {
+  DAILY: 'Diario',
+  WEEKLY: 'Semanal',
+  BIWEEKLY: 'Quincenal',
+  MONTHLY: 'Mensual',
+  CUSTOM: 'Personalizado',
+};

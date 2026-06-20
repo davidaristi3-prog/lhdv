@@ -10,6 +10,7 @@ export interface Variant {
   name: string;
   priceCop: number;
   weightGrams: number | null;
+  capacityLoad: number;
   active: boolean;
 }
 
@@ -96,6 +97,9 @@ export interface Order {
   routeSeq?: number | null;
   deliveredAt?: string | null;
   deliveryPhotoPath?: string | null;
+  deliveredByCourierId?: string | null;
+  courierPayCop?: number | null;
+  settlementId?: string | null;
   subtotalCop: number;
   totalCop: number;
   deliveryCostCop: number;
@@ -214,4 +218,72 @@ export interface DeliveryRoute {
   courier?: { id: string; name: string } | null;
   orders: Order[];
   _count?: { orders: number };
+}
+
+// ─── Domiciliarios (perfil, tarifas, liquidaciones) ───────────
+
+export type CourierVehicle = 'MOTO' | 'CARRO';
+export type SettlementStatus = 'PENDING' | 'PAID';
+export type SettlementPeriod = 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'CUSTOM';
+
+export interface CourierZoneRate {
+  id: string;
+  zoneId: string;
+  payCop: number;
+  zone: { id: string; name: string };
+}
+
+export interface Courier {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+  vehicle: CourierVehicle | null;
+  capacityLimit: number | null;
+  zoneRates: CourierZoneRate[];
+}
+
+export interface SettlementOrder {
+  id: string;
+  code: string;
+  deliveryZone: string | null;
+  courierPayCop: number | null;
+  deliveredAt: string | null;
+  customer: { name: string | null; whatsappPhone: string };
+}
+
+export interface SettlementPreview {
+  courierId: string;
+  orders: SettlementOrder[];
+  totalCop: number;
+  orderCount: number;
+  missingRate: number;
+}
+
+export interface CourierSettlement {
+  id: string;
+  courierId: string;
+  status: SettlementStatus;
+  period: SettlementPeriod;
+  periodFrom: string;
+  periodTo: string;
+  totalCop: number;
+  orderCount: number;
+  notes: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  courier?: { id: string; name: string } | null;
+  orders?: SettlementOrder[];
+  _count?: { orders: number };
+}
+
+export interface SuggestGroup {
+  courier: { id: string; name: string; capacityLimit: number | null };
+  orders: (Order & { suggestedLoad: number; suggestedPayCop: number })[];
+  totalLoad: number;
+}
+
+export interface SuggestResponse {
+  groups: SuggestGroup[];
+  unassigned: { order: Order; load: number; reason: string }[];
 }

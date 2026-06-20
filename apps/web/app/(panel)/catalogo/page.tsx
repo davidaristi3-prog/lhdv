@@ -79,11 +79,16 @@ function ProductCard({ product, onChange }: { product: Product; onChange: () => 
 
 function VariantRow({ variant, onChange }: { variant: Variant; onChange: () => void }) {
   const [price, setPrice] = useState(variant.priceCop);
+  const [load, setLoad] = useState(variant.capacityLoad);
   const [busy, setBusy] = useState(false);
+  const dirty = price !== variant.priceCop || load !== variant.capacityLoad;
   async function save() {
     setBusy(true);
     try {
-      await api(`/catalog/variants/${variant.id}`, { method: 'PATCH', body: JSON.stringify({ priceCop: price }) });
+      await api(`/catalog/variants/${variant.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ priceCop: price, capacityLoad: load }),
+      });
       onChange();
     } finally {
       setBusy(false);
@@ -100,12 +105,22 @@ function VariantRow({ variant, onChange }: { variant: Variant; onChange: () => v
         type="number"
         value={price}
         onChange={(e) => setPrice(Number(e.target.value))}
-        className={`w-32 ${field}`}
+        className={`w-28 ${field}`}
+        title="Precio"
       />
-      <button onClick={save} disabled={busy || price === variant.priceCop} className={btn}>
+      <label className="flex items-center gap-1 text-xs text-neutral-400" title="Carga: cuánto ocupa en la ruta del domiciliario">
+        carga
+        <input
+          type="number"
+          min={1}
+          value={load}
+          onChange={(e) => setLoad(Math.max(1, Number(e.target.value)))}
+          className={`w-16 ${field}`}
+        />
+      </label>
+      <button onClick={save} disabled={busy || !dirty} className={btn}>
         Guardar
       </button>
-      <span className="text-neutral-400">{formatCop(variant.priceCop)}</span>
       <label className="ml-auto flex items-center gap-1.5 text-neutral-500">
         <input type="checkbox" checked={variant.active} onChange={(e) => toggle(e.target.checked)} />
         Activo
@@ -117,13 +132,15 @@ function VariantRow({ variant, onChange }: { variant: Variant; onChange: () => v
 function NewVariant({ productId, onCreated }: { productId: string; onCreated: () => void }) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState(0);
+  const [load, setLoad] = useState(1);
   async function add() {
     await api(`/catalog/products/${productId}/variants`, {
       method: 'POST',
-      body: JSON.stringify({ name, priceCop: price }),
+      body: JSON.stringify({ name, priceCop: price, capacityLoad: load }),
     });
     setName('');
     setPrice(0);
+    setLoad(1);
     onCreated();
   }
   return (
@@ -134,8 +151,18 @@ function NewVariant({ productId, onCreated }: { productId: string; onCreated: ()
         placeholder="Precio"
         value={price || ''}
         onChange={(e) => setPrice(Number(e.target.value))}
-        className={`w-32 ${field}`}
+        className={`w-28 ${field}`}
       />
+      <label className="flex items-center gap-1 text-xs text-neutral-400">
+        carga
+        <input
+          type="number"
+          min={1}
+          value={load}
+          onChange={(e) => setLoad(Math.max(1, Number(e.target.value)))}
+          className={`w-16 ${field}`}
+        />
+      </label>
       <button onClick={add} disabled={!name || !price} className={btn}>
         + Tamaño
       </button>

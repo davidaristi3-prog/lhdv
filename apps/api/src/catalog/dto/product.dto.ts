@@ -20,6 +20,11 @@ export class CreateVariantDto {
   @Min(0)
   weightGrams?: number;
 
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  capacityLoad?: number;
+
   @IsInt()
   @Min(0)
   priceCop!: number;
@@ -79,6 +84,11 @@ export class UpdateVariantDto {
   @IsInt()
   @Min(0)
   weightGrams?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  capacityLoad?: number;
 
   @IsOptional()
   @IsInt()

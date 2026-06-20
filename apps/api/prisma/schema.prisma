@@ -78,13 +78,20 @@ model User {
   passwordHash String
   role         UserRole
   active       Boolean  @default(true)
+  // Solo aplican a domiciliarios (role DELIVERY); null para el resto.
+  vehicle       CourierVehicle?
+  capacityLimit Int? // tope de carga ponderada por ruta; null = sin límite
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  createdOrders Order[]            @relation("OrderCreatedBy")
-  statusEvents  OrderStatusEvent[]
-  expenses      Expense[]
-  courierRoutes DeliveryRoute[]    @relation("CourierRoutes")
+  createdOrders      Order[]             @relation("OrderCreatedBy")
+  statusEvents       OrderStatusEvent[]
+  expenses           Expense[]
+  courierRoutes      DeliveryRoute[]     @relation("CourierRoutes")
+  zoneRates          CourierZoneRate[]
+  deliveries         Order[]             @relation("OrderDeliveredBy")
+  settlements        CourierSettlement[] @relation("CourierSettlements")
+  createdSettlements CourierSettlement[] @relation("SettlementCreatedBy")
 }
 
 // ─── Clientes ─────────────────────────────────────────────────
@@ -138,12 +145,13 @@ model Product {
 }
 
 model ProductVariant {
-  id          String  @id @default(cuid())
-  productId   String
-  name        String // p.ej. "Mediana"
-  weightGrams Int? // peso por tamaño (material pendiente de la propietaria)
-  priceCop    Int
-  active      Boolean @default(true)
+  id           String  @id @default(cuid())
+  productId    String
+  name         String // p.ej. "Mediana"
+  weightGrams  Int? // peso por tamaño (material pendiente de la propietaria)
+  capacityLoad Int     @default(1) // "carga" que ocupa esta presentación en una ruta
+  priceCop     Int
+  active       Boolean @default(true)
 
   product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]
@@ -180,6 +188,9 @@ model Order {
   routeSeq          Int? // posición dentro de la ruta (orden de entrega)
   deliveredAt       DateTime?
   deliveryPhotoPath String? // foto de evidencia de entrega
+  deliveredByCourierId String? // snapshot del domiciliario que entregó
+  courierPayCop        Int? // snapshot del pago al domiciliario por esta entrega
+  settlementId         String? // liquidación que ya pagó este pedido (one-shot)
   subtotalCop     Int           @default(0)
   totalCop        Int           @default(0)
   notes           String?
@@ -191,12 +202,16 @@ model Order {
   createdBy       User?              @relation("OrderCreatedBy", fields: [createdById], references: [id])
   customerAddress CustomerAddress?   @relation(fields: [customerAddressId], references: [id], onDelete: SetNull)
   route           DeliveryRoute?     @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  deliveredByCourier User?           @relation("OrderDeliveredBy", fields: [deliveredByCourierId], references: [id])
+  settlement      CourierSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
   items           OrderItem[]
   payments        Payment[]
   statusEvents    OrderStatusEvent[]
 
   @@index([status])
   @@index([deliveryDate])
+  @@index([settlementId])
+  @@index([deliveredByCourierId])
 }
 
 model OrderItem {
@@ -307,6 +322,8 @@ model DeliveryZone {
   aliases         String[] @default([])
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())
+
+  courierRates CourierZoneRate[]
 }
 
 enum RouteStatus {
@@ -383,4 +400,67 @@ model RecipeItem {
   ingredient Ingredient     @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
   @@unique([productVariantId, ingredientId])
+}
+
+// ─── Domiciliarios: vehículo, capacidad, zonas-tarifa y liquidación ───────────
+
+enum CourierVehicle {
+  MOTO
+  CARRO
+}
+
+enum SettlementStatus {
+  PENDING // generada, aún no pagada
+  PAID // pagada al domiciliario
+}
+
+enum SettlementPeriod {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM // rango libre elegido por el operador
+}
+
+// Qué zonas cubre cada domiciliario y cuánto se le PAGA por entrega en cada una.
+// Doble propósito: la fila = "cubre esta zona"; payCop = tarifa de pago (distinto
+// de DeliveryZone.deliveryCostCop, que es lo que se le COBRA al cliente).
+model CourierZoneRate {
+  id        String   @id @default(cuid())
+  courierId String
+  zoneId    String
+  payCop    Int // pago al domiciliario por entrega en esta zona
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courier User         @relation(fields: [courierId], references: [id], onDelete: Cascade)
+  zone    DeliveryZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([courierId, zoneId])
+  @@index([zoneId])
+}
+
+// Liquidación de pago a un domiciliario por un período. Los pedidos incluidos
+// quedan marcados con Order.settlementId (un pedido entra en una sola liquidación).
+model CourierSettlement {
+  id          String           @id @default(cuid())
+  courierId   String
+  status      SettlementStatus @default(PENDING)
+  period      SettlementPeriod
+  periodFrom  DateTime         @db.Date
+  periodTo    DateTime         @db.Date
+  totalCop    Int              @default(0) // snapshot al generar
+  orderCount  Int              @default(0) // snapshot al generar
+  notes       String?
+  paidAt      DateTime?
+  createdById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  courier   User    @relation("CourierSettlements", fields: [courierId], references: [id])
+  createdBy User?   @relation("SettlementCreatedBy", fields: [createdById], references: [id])
+  orders    Order[]
+
+  @@index([courierId])
+  @@index([status])
 }

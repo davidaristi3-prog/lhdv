@@ -28,6 +28,12 @@ export class RoutesController {
     return this.routes.availableOrders();
   }
 
+  @Roles(UserRole.OWNER)
+  @Get('suggest')
+  suggest() {
+    return this.routes.suggestAssignments();
+  }
+
   @Roles(UserRole.OWNER, UserRole.DELIVERY)
   @Get('mine')
   mine(@CurrentUser() user: JwtPayload) {

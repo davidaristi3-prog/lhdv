@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { formatDate } from '@/lib/labels';
-import type { DeliveryRoute, Order, RouteStatus } from '@/lib/types';
+import type { DeliveryRoute, Order, RouteStatus, SuggestResponse } from '@/lib/types';
 
 const ROUTE_LABEL: Record<RouteStatus, string> = {
   DRAFT: 'Borrador',
@@ -27,6 +27,7 @@ interface PanelUser {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+const field = 'rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
 
 export default function DomiciliosPage() {
   const router = useRouter();
@@ -50,17 +51,18 @@ export default function DomiciliosPage() {
     });
   }
 
+  function refreshAll() {
+    available.reload();
+    routes.reload();
+  }
+
   async function createRoute() {
     setError(null);
     setBusy(true);
     try {
       const route = await api<DeliveryRoute>('/routes', {
         method: 'POST',
-        body: JSON.stringify({
-          date,
-          courierId: courierId || undefined,
-          orderIds: Array.from(selected),
-        }),
+        body: JSON.stringify({ date, courierId: courierId || undefined, orderIds: Array.from(selected) }),
       });
       router.push(`/domicilios/${route.id}`);
     } catch (e) {
@@ -69,15 +71,16 @@ export default function DomiciliosPage() {
     }
   }
 
-  const field = 'rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
-
   return (
     <div className="space-y-6">
       <h1 className="text-lg font-semibold">Domicilios</h1>
 
-      {/* Armar ruta */}
+      {/* Sugerencia automática por zona y capacidad */}
+      <SugerenciaRutas couriers={couriers} date={date} onCreated={refreshAll} />
+
+      {/* Armar ruta manual */}
       <div className="rounded-xl bg-white p-5 ring-1 ring-neutral-200">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-700">Armar ruta</h2>
+        <h2 className="mb-3 text-sm font-semibold text-neutral-700">Armar ruta manual</h2>
         {available.data && available.data.length === 0 && (
           <p className="text-sm text-neutral-400">No hay pedidos listos para despachar.</p>
         )}
@@ -149,6 +152,109 @@ export default function DomiciliosPage() {
             </Link>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Propuesta de asignación por zona/capacidad, editable, que crea una ruta por domiciliario. */
+function SugerenciaRutas({
+  couriers,
+  date,
+  onCreated,
+}: {
+  couriers: { id: string; name: string }[];
+  date: string;
+  onCreated: () => void;
+}) {
+  const { data, loading, reload } = useApi<SuggestResponse>('/routes/suggest');
+  const [assign, setAssign] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!data) return;
+    const init: Record<string, string> = {};
+    for (const g of data.groups) for (const o of g.orders) init[o.id] = g.courier.id;
+    for (const u of data.unassigned) init[u.order.id] = '';
+    setAssign(init);
+  }, [data]);
+
+  if (loading || !data) return null;
+  const allOrders = [...data.groups.flatMap((g) => g.orders), ...data.unassigned.map((u) => u.order)];
+  if (allOrders.length === 0) return null;
+
+  const byCourier = new Map<string, string[]>();
+  for (const [orderId, cid] of Object.entries(assign)) {
+    if (!cid) continue;
+    byCourier.set(cid, [...(byCourier.get(cid) ?? []), orderId]);
+  }
+
+  async function confirm() {
+    setBusy(true);
+    try {
+      for (const [cid, orderIds] of byCourier.entries()) {
+        await api('/routes', { method: 'POST', body: JSON.stringify({ date, courierId: cid, orderIds }) });
+      }
+      onCreated();
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-5 ring-1 ring-neutral-200">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-neutral-700">Sugerencia automática por zona</h2>
+        <button onClick={() => reload()} className="text-xs text-blue-700 hover:underline">
+          Recalcular
+        </button>
+      </div>
+      <p className="mb-3 text-xs text-neutral-400">
+        Se sugiere un domiciliario por la zona del pedido respetando su capacidad. Podés reasignar antes de crear.
+      </p>
+      <div className="space-y-2">
+        {allOrders.map((o) => {
+          const reason = data.unassigned.find((u) => u.order.id === o.id)?.reason;
+          const cid = assign[o.id] ?? '';
+          return (
+            <div key={o.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 p-2 text-sm">
+              <span className="font-medium">{o.code}</span>
+              <span className="text-neutral-500">{o.deliveryZone ?? 'sin zona'}</span>
+              <select
+                value={cid}
+                onChange={(e) => setAssign((a) => ({ ...a, [o.id]: e.target.value }))}
+                className="ml-auto rounded-lg border border-neutral-300 px-2 py-1 text-sm"
+              >
+                <option value="">— sin asignar</option>
+                {couriers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {reason && !cid && (
+                <span className="w-full text-xs text-amber-600">
+                  {reason === 'zona_sin_domiciliario'
+                    ? 'Ningún domiciliario cubre esta zona'
+                    : 'Sin capacidad disponible'}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex items-center gap-2 border-t border-neutral-100 pt-3">
+        <button
+          onClick={confirm}
+          disabled={busy || byCourier.size === 0}
+          className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+        >
+          {busy ? 'Creando…' : `Crear ${byCourier.size} ruta(s) sugerida(s)`}
+        </button>
+        <span className="text-xs text-neutral-400">Cada ruta se ordena por cercanía.</span>
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import { ReportsModule } from './reports/reports.module';
 import { DeliveryZonesModule } from './delivery-zones/delivery-zones.module';
 import { GeocodingModule } from './geocoding/geocoding.module';
 import { RoutesModule } from './routes/routes.module';
+import { CouriersModule } from './couriers/couriers.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 
 @Module({
@@ -37,6 +38,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     DeliveryZonesModule,
     GeocodingModule,
     RoutesModule,
+    CouriersModule,
     MaintenanceModule,
   ],
   controllers: [HealthController],
