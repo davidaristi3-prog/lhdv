@@ -32,6 +32,15 @@ export class OrdersController {
     return this.orders.createManual(dto, user.sub);
   }
 
+  @Roles(UserRole.OWNER, UserRole.SALES)
+  @Post(':id/confirm')
+  confirm(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.orders.confirmManual(id, {
+      byUserId: user.sub,
+      reason: 'Enviado a cocina desde el panel',
+    });
+  }
+
   @Patch(':id/transition')
   transition(
     @Param('id') id: string,

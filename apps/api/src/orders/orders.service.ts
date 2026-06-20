@@ -196,6 +196,46 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Atajo de entrada manual: envía un pedido en borrador (o pendiente de
+   * confirmación/pago, o escalado) directo a CONFIRMED para que entre a cocina,
+   * sin recorrer los pasos del flujo del bot. Registra el evento de auditoría.
+   */
+  async confirmManual(orderId: string, opts: TransitionOptions = {}) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) throw new NotFoundException(`Pedido ${orderId} no existe`);
+      const from = order.status as OrderStatus;
+      // Idempotente: si ya está en cocina o más adelante, no hace nada.
+      if (from === 'CONFIRMED' || PRODUCTION_STATUSES.includes(from)) return order;
+
+      const confirmable: OrderStatus[] = [
+        'DRAFT',
+        'PENDING_CONFIRMATION',
+        'AWAITING_PAYMENT',
+        'NEEDS_HUMAN',
+      ];
+      if (!confirmable.includes(from)) {
+        throw new BadRequestException(`No se puede enviar a cocina un pedido en estado ${from}`);
+      }
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: { status: 'CONFIRMED' },
+      });
+      await tx.orderStatusEvent.create({
+        data: {
+          orderId,
+          fromStatus: from,
+          toStatus: 'CONFIRMED',
+          byUserId: opts.byUserId ?? null,
+          reason: opts.reason ?? 'Enviado a cocina manualmente',
+        },
+      });
+      return updated;
+    });
+  }
+
   // ─── Helpers ────────────────────────────────────────────────
 
   private async resolveCustomer(dto: CreateOrderDto): Promise<string> {
