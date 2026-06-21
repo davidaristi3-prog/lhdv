@@ -150,7 +150,8 @@ model ProductVariant {
   name         String // p.ej. "Mediana"
   weightGrams  Int? // peso por tamaño (material pendiente de la propietaria)
   capacityLoad Int     @default(1) // "carga" que ocupa esta presentación en una ruta
-  priceCop     Int
+  priceCop     Int // precio al cliente final
+  wholesalePriceCop Int? // precio a vendedor/mayorista (opcional)
   active       Boolean @default(true)
 
   product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -191,6 +192,7 @@ model Order {
   deliveredByCourierId String? // snapshot del domiciliario que entregó
   courierPayCop        Int? // snapshot del pago al domiciliario por esta entrega
   settlementId         String? // liquidación que ya pagó este pedido (one-shot)
+  inventoryDeductedAt  DateTime? // cuándo se descontó el inventario (idempotencia)
   subtotalCop     Int           @default(0)
   totalCop        Int           @default(0)
   notes           String?
@@ -384,9 +386,12 @@ model Ingredient {
   name           String  @unique
   unit           String // 'g', 'ml', 'unidad'
   costPerUnitCop Float // costo por unidad base (puede ser fraccional: $/g)
+  stockQty       Float   @default(0) // existencias actuales (en `unit`)
+  lowStockQty    Float? // umbral de alerta de stock bajo
   active         Boolean @default(true)
 
   recipeItems RecipeItem[]
+  movements   InventoryMovement[]
 }
 
 // Receta de una presentación: cuánto de cada insumo lleva → permite el costeo.
@@ -463,4 +468,30 @@ model CourierSettlement {
 
   @@index([courierId])
   @@index([status])
+}
+
+// ─── Inventario de materias primas ────────────────────────────
+
+enum InventoryMoveType {
+  PURCHASE // compra / entrada de stock
+  CONSUMPTION // consumo por producción de un pedido
+  ADJUSTMENT // ajuste manual (conteo / corrección)
+}
+
+// Rastro de cómo se movió el stock de un insumo. La existencia actual vive en
+// Ingredient.stockQty; esto es el historial.
+model InventoryMovement {
+  id           String            @id @default(cuid())
+  ingredientId String
+  type         InventoryMoveType
+  quantity     Float // siempre positivo; el type da el signo (PURCHASE suma, CONSUMPTION resta)
+  reason       String?
+  orderId      String? // si vino del consumo de producción de un pedido
+  createdById  String?
+  createdAt    DateTime          @default(now())
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId])
+  @@index([orderId])
 }

@@ -24,3 +24,6 @@ services:
         value: "6.2442"
       - key: BAKERY_LNG
         value: "-75.5812"
+      # Geocodificación con Google (opcional; sin esto usa OpenStreetMap):
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false

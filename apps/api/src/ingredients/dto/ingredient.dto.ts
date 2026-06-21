@@ -39,6 +39,11 @@ export class UpdateIngredientDto {
   costPerUnitCop?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lowStockQty?: number;
+
+  @IsOptional()
   @IsBoolean()
   active?: boolean;
 }
@@ -57,4 +62,24 @@ export class SetRecipeDto {
   @ValidateNested({ each: true })
   @Type(() => RecipeItemInput)
   items!: RecipeItemInput[];
+}
+
+export class PurchaseDto {
+  @IsNumber()
+  @Min(0)
+  quantity!: number; // cuánto entra (en la unidad del insumo)
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class AdjustDto {
+  @IsNumber()
+  @Min(0)
+  quantity!: number; // nuevo valor de stock (conteo real)
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

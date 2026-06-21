@@ -9,6 +9,7 @@ export interface Variant {
   productId: string;
   name: string;
   priceCop: number;
+  wholesalePriceCop: number | null;
   weightGrams: number | null;
   capacityLoad: number;
   active: boolean;
@@ -148,7 +149,20 @@ export interface Ingredient {
   name: string;
   unit: string;
   costPerUnitCop: number;
+  stockQty: number;
+  lowStockQty: number | null;
   active: boolean;
+}
+
+export type InventoryMoveType = 'PURCHASE' | 'CONSUMPTION' | 'ADJUSTMENT';
+
+export interface InventoryMovement {
+  id: string;
+  type: InventoryMoveType;
+  quantity: number;
+  reason: string | null;
+  createdAt: string;
+  ingredient?: { name: string; unit: string };
 }
 
 export interface RecipeItem {

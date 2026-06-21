@@ -192,8 +192,56 @@ export class OrdersService {
           reason: opts.reason ?? null,
         },
       });
+
+      // Inventario: al iniciar producción se descuentan los insumos según la receta
+      // de cada producto del pedido (una sola vez, controlado por inventoryDeductedAt).
+      // Se minimizan las queries —una sola lectura de recetas con `in`, un solo
+      // createMany de movimientos— para no agotar el tiempo de la transacción
+      // interactiva contra Postgres remoto (Neon).
+      if (to === 'IN_PRODUCTION' && order.inventoryDeductedAt == null) {
+        const orderItems = await tx.orderItem.findMany({
+          where: { orderId },
+          select: { quantity: true, productVariantId: true },
+        });
+        const variantIds = [...new Set(orderItems.map((it) => it.productVariantId))];
+        const recipeItems = await tx.recipeItem.findMany({
+          where: { productVariantId: { in: variantIds } },
+          select: { productVariantId: true, ingredientId: true, quantity: true },
+        });
+        const recipeByVariant = new Map<string, { ingredientId: string; quantity: number }[]>();
+        for (const r of recipeItems) {
+          const list = recipeByVariant.get(r.productVariantId) ?? [];
+          list.push({ ingredientId: r.ingredientId, quantity: r.quantity });
+          recipeByVariant.set(r.productVariantId, list);
+        }
+        const consume = new Map<string, number>();
+        for (const it of orderItems) {
+          for (const r of recipeByVariant.get(it.productVariantId) ?? []) {
+            consume.set(r.ingredientId, (consume.get(r.ingredientId) ?? 0) + r.quantity * it.quantity);
+          }
+        }
+        if (consume.size > 0) {
+          for (const [ingredientId, qty] of consume) {
+            await tx.ingredient.update({
+              where: { id: ingredientId },
+              data: { stockQty: { decrement: qty } },
+            });
+          }
+          await tx.inventoryMovement.createMany({
+            data: [...consume].map(([ingredientId, qty]) => ({
+              ingredientId,
+              type: 'CONSUMPTION' as const,
+              quantity: qty,
+              orderId,
+              reason: 'Producción',
+            })),
+          });
+        }
+        await tx.order.update({ where: { id: orderId }, data: { inventoryDeductedAt: new Date() } });
+      }
+
       return updated;
-    });
+    }, { maxWait: 10000, timeout: 20000 });
   }
 
   /**

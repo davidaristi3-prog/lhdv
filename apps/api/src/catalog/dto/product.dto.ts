@@ -28,6 +28,11 @@ export class CreateVariantDto {
   @IsInt()
   @Min(0)
   priceCop!: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  wholesalePriceCop?: number;
 }
 
 export class CreateProductDto {
@@ -94,6 +99,11 @@ export class UpdateVariantDto {
   @IsInt()
   @Min(0)
   priceCop?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  wholesalePriceCop?: number;
 
   @IsOptional()
   @IsBoolean()

@@ -79,15 +79,19 @@ function ProductCard({ product, onChange }: { product: Product; onChange: () => 
 
 function VariantRow({ variant, onChange }: { variant: Variant; onChange: () => void }) {
   const [price, setPrice] = useState(variant.priceCop);
+  const [wholesale, setWholesale] = useState(variant.wholesalePriceCop ?? 0);
   const [load, setLoad] = useState(variant.capacityLoad);
   const [busy, setBusy] = useState(false);
-  const dirty = price !== variant.priceCop || load !== variant.capacityLoad;
+  const dirty =
+    price !== variant.priceCop ||
+    wholesale !== (variant.wholesalePriceCop ?? 0) ||
+    load !== variant.capacityLoad;
   async function save() {
     setBusy(true);
     try {
       await api(`/catalog/variants/${variant.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ priceCop: price, capacityLoad: load }),
+        body: JSON.stringify({ priceCop: price, wholesalePriceCop: wholesale || null, capacityLoad: load }),
       });
       onChange();
     } finally {
@@ -99,15 +103,27 @@ function VariantRow({ variant, onChange }: { variant: Variant; onChange: () => v
     onChange();
   }
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex flex-wrap items-center gap-2 text-sm">
       <span className="w-28 text-neutral-700">{variant.name}</span>
-      <input
-        type="number"
-        value={price}
-        onChange={(e) => setPrice(Number(e.target.value))}
-        className={`w-28 ${field}`}
-        title="Precio"
-      />
+      <label className="flex items-center gap-1 text-xs text-neutral-400" title="Precio al cliente final">
+        cliente
+        <input
+          type="number"
+          value={price}
+          onChange={(e) => setPrice(Number(e.target.value))}
+          className={`w-24 ${field}`}
+        />
+      </label>
+      <label className="flex items-center gap-1 text-xs text-neutral-400" title="Precio a vendedor / mayorista">
+        vendedor
+        <input
+          type="number"
+          value={wholesale || ''}
+          placeholder="—"
+          onChange={(e) => setWholesale(Number(e.target.value))}
+          className={`w-24 ${field}`}
+        />
+      </label>
       <label className="flex items-center gap-1 text-xs text-neutral-400" title="Carga: cuánto ocupa en la ruta del domiciliario">
         carga
         <input
@@ -132,25 +148,39 @@ function VariantRow({ variant, onChange }: { variant: Variant; onChange: () => v
 function NewVariant({ productId, onCreated }: { productId: string; onCreated: () => void }) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState(0);
+  const [wholesale, setWholesale] = useState(0);
   const [load, setLoad] = useState(1);
   async function add() {
     await api(`/catalog/products/${productId}/variants`, {
       method: 'POST',
-      body: JSON.stringify({ name, priceCop: price, capacityLoad: load }),
+      body: JSON.stringify({
+        name,
+        priceCop: price,
+        wholesalePriceCop: wholesale || undefined,
+        capacityLoad: load,
+      }),
     });
     setName('');
     setPrice(0);
+    setWholesale(0);
     setLoad(1);
     onCreated();
   }
   return (
-    <div className="mt-2 flex items-center gap-2">
+    <div className="mt-2 flex flex-wrap items-center gap-2">
       <input placeholder="Nuevo tamaño" value={name} onChange={(e) => setName(e.target.value)} className={`w-28 ${field}`} />
       <input
         type="number"
-        placeholder="Precio"
+        placeholder="Precio cliente"
         value={price || ''}
         onChange={(e) => setPrice(Number(e.target.value))}
+        className={`w-28 ${field}`}
+      />
+      <input
+        type="number"
+        placeholder="Precio vendedor"
+        value={wholesale || ''}
+        onChange={(e) => setWholesale(Number(e.target.value))}
         className={`w-28 ${field}`}
       />
       <label className="flex items-center gap-1 text-xs text-neutral-400">
