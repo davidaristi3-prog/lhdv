@@ -67,6 +67,22 @@ export default function PedidosPage() {
     }
   }
 
+  // Pedido que se recoge en el local: al recogerlo queda entregado (no pasa por domiciliario).
+  async function marcarRecogido(id: string) {
+    setBusyId(id);
+    try {
+      await api(`/orders/${id}/transition`, {
+        method: 'PATCH',
+        body: JSON.stringify({ to: 'DELIVERED', reason: 'Recogido en el local' }),
+      });
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
@@ -129,7 +145,9 @@ export default function PedidosPage() {
                 <th className="px-4 py-3">Entrega</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3 text-right">Total</th>
-                {tab === 'borradores' && <th className="px-4 py-3 text-right">Acciones</th>}
+                {(tab === 'borradores' || tab === 'activos') && (
+                  <th className="px-4 py-3 text-right">Acciones</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -173,6 +191,24 @@ export default function PedidosPage() {
                         >
                           Descartar
                         </button>
+                      </div>
+                    </td>
+                  )}
+                  {tab === 'activos' && (
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        {o.status === 'READY' && o.deliveryType === 'PICKUP' && (
+                          <button
+                            onClick={() => marcarRecogido(o.id)}
+                            disabled={busyId === o.id}
+                            className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {busyId === o.id ? '…' : '✓ Recogido'}
+                          </button>
+                        )}
+                        {o.status === 'READY' && o.deliveryType !== 'PICKUP' && (
+                          <span className="text-xs text-neutral-400">→ en Domicilios</span>
+                        )}
                       </div>
                     </td>
                   )}

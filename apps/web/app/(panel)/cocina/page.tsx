@@ -9,13 +9,13 @@ import { useAuth } from '@/lib/auth';
 import { STATUS_LABEL, formatDate } from '@/lib/labels';
 import type { Order } from '@/lib/types';
 
-const COLUMNS: OrderStatus[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'OUT_FOR_DELIVERY'];
+const COLUMNS: OrderStatus[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY'];
 
+// Cocina solo produce: termina en "Listo". La entrega (recoger en local o domicilio)
+// se maneja aparte (recoger: botón en Pedidos; domicilio: módulo Domicilios).
 const FORWARD: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> = {
   CONFIRMED: { to: 'IN_PRODUCTION', label: 'Iniciar' },
   IN_PRODUCTION: { to: 'READY', label: 'Marcar listo' },
-  READY: { to: 'OUT_FOR_DELIVERY', label: 'Despachar' },
-  OUT_FOR_DELIVERY: { to: 'DELIVERED', label: 'Entregar' },
 };
 
 export default function CocinaPage() {
@@ -96,6 +96,11 @@ export default function CocinaPage() {
                         <p className="mt-2 text-xs text-neutral-400">
                           {o.customer.name ?? o.customer.whatsappPhone}
                         </p>
+                        {o.status === 'READY' && (
+                          <p className="mt-2 text-xs font-medium text-neutral-500">
+                            {o.deliveryType === 'PICKUP' ? '📦 Recoge en el local' : '🛵 Pasa a Domicilios'}
+                          </p>
+                        )}
                         {!readOnly && (step || o.status === 'IN_PRODUCTION') && (
                           <div className="mt-2 flex items-stretch gap-1.5">
                             {step && (

@@ -24,13 +24,8 @@ interface TransitionOptions {
   scrap?: boolean;
 }
 
-/** Estados que ve el tablero de cocina, en orden de flujo. */
-const BOARD_STATUSES: OrderStatus[] = [
-  'CONFIRMED',
-  'IN_PRODUCTION',
-  'READY',
-  'OUT_FOR_DELIVERY',
-];
+/** Estados que ve el tablero de cocina: solo producción (la entrega se maneja aparte). */
+const BOARD_STATUSES: OrderStatus[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY'];
 
 @Injectable()
 export class OrdersService {
