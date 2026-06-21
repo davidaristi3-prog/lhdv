@@ -451,8 +451,14 @@ export class OrdersService {
   }
 
   private async nextOrderCode(): Promise<string> {
-    const count = await this.prisma.order.count();
-    return `LHDV-${String(count + 1).padStart(4, '0')}`;
+    // Basado en el código más alto existente, NO en count(): al borrar borradores
+    // quedan huecos y count() reusaría un código ya usado (choca con el unique → P2002).
+    const last = await this.prisma.order.findFirst({
+      orderBy: { code: 'desc' },
+      select: { code: true },
+    });
+    const lastNum = last ? parseInt(last.code.replace(/\D/g, ''), 10) || 0 : 0;
+    return `LHDV-${String(lastNum + 1).padStart(4, '0')}`;
   }
 
   private dayRange(date: string): Prisma.DateTimeFilter {
