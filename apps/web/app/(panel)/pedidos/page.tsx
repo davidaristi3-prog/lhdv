@@ -137,7 +137,7 @@ export default function PedidosPage() {
                 <tr key={o.id} className="hover:bg-neutral-50">
                   <td className="px-4 py-3 font-medium">
                     <Link href={`/pedidos/${o.id}`} className="text-blue-700 hover:underline">
-                      {o.code}
+                      {o.code ?? 'Borrador'}
                     </Link>
                   </td>
                   <td className="px-4 py-3">

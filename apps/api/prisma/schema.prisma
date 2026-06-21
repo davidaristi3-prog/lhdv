@@ -174,7 +174,7 @@ model Addition {
 
 model Order {
   id              String        @id @default(cuid())
-  code            String        @unique // legible: LHDV-0001
+  code            String?       @unique // LHDV-0001; null mientras es borrador (se asigna al entrar a cocina)
   customerId      String
   channel         OrderChannel
   status          OrderStatus   @default(DRAFT)

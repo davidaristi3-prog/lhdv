@@ -58,7 +58,7 @@ export default function PedidoDetallePage() {
           <Link href="/pedidos" className="text-sm text-neutral-500 hover:underline">
             ← Pedidos
           </Link>
-          <h1 className="text-lg font-semibold">{order.code}</h1>
+          <h1 className="text-lg font-semibold">{order.code ?? 'Borrador'}</h1>
           <StatusBadge status={order.status} />
           {order.isCustom && (
             <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">

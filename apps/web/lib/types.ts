@@ -84,7 +84,7 @@ export interface StatusEvent {
 
 export interface Order {
   id: string;
-  code: string;
+  code: string | null; // null mientras es borrador; se asigna al entrar a cocina
   status: OrderStatus;
   channel: Channel;
   isCustom: boolean;

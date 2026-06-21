@@ -87,7 +87,8 @@ export class OrdersService {
     const { itemsData, subtotal } = await this.buildOrderItems(items);
 
     const deliveryCostCop = dto.deliveryCostCop ?? 0;
-    const code = await this.nextOrderCode();
+    // El código (consecutivo) se asigna solo al entrar a cocina; un borrador va sin número.
+    const code = dto.confirm ? await this.nextOrderCode() : null;
     const delivery = await this.resolveAddress(customerId, dto);
 
     // La persona que toma el pedido decide: mandarlo directo a cocina (CONFIRMED)
@@ -238,7 +239,12 @@ export class OrdersService {
         throw err;
       }
 
-      const updated = await tx.order.update({ where: { id: orderId }, data: { status: to } });
+      // Al entrar a cocina por primera vez (CONFIRMED) recibe su número consecutivo.
+      const code = to === 'CONFIRMED' && order.code == null ? await this.nextOrderCode(tx) : undefined;
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: { status: to, ...(code ? { code } : {}) },
+      });
       await tx.orderStatusEvent.create({
         data: {
           orderId,
@@ -360,9 +366,11 @@ export class OrdersService {
         throw new BadRequestException('Agregá al menos un producto antes de enviar a cocina');
       }
 
+      // Al entrar a cocina recibe su número consecutivo (si aún no tenía).
+      const code = order.code ?? (await this.nextOrderCode(tx));
       const updated = await tx.order.update({
         where: { id: orderId },
-        data: { status: 'CONFIRMED' },
+        data: { status: 'CONFIRMED', code },
       });
       await tx.orderStatusEvent.create({
         data: {
@@ -450,14 +458,16 @@ export class OrdersService {
     return {};
   }
 
-  private async nextOrderCode(): Promise<string> {
-    // Basado en el código más alto existente, NO en count(): al borrar borradores
-    // quedan huecos y count() reusaría un código ya usado (choca con el unique → P2002).
-    const last = await this.prisma.order.findFirst({
+  private async nextOrderCode(client: Prisma.TransactionClient = this.prisma): Promise<string> {
+    // El consecutivo cuenta solo pedidos que ya tienen código (los que entraron a
+    // cocina). Se basa en el código más alto existente, NO en count(), para no
+    // reusar huecos de borradores borrados (chocaría con el unique → P2002).
+    const last = await client.order.findFirst({
+      where: { code: { not: null } },
       orderBy: { code: 'desc' },
       select: { code: true },
     });
-    const lastNum = last ? parseInt(last.code.replace(/\D/g, ''), 10) || 0 : 0;
+    const lastNum = last?.code ? parseInt(last.code.replace(/\D/g, ''), 10) || 0 : 0;
     return `LHDV-${String(lastNum + 1).padStart(4, '0')}`;
   }
 
