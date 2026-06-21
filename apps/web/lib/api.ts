@@ -19,6 +19,14 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
   });
 
   if (!res.ok) {
+    // Sesión vencida o token inválido: limpiar la sesión y volver al login, en vez
+    // de dejar al usuario "logueado" pero viendo "Token inválido" en cada pantalla.
+    if (res.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('lhdv_token');
+      localStorage.removeItem('lhdv_user');
+      if (window.location.pathname !== '/login') window.location.href = '/login';
+      throw new Error('Tu sesión expiró. Volvé a iniciar sesión.');
+    }
     const body = (await res.json().catch(() => ({}))) as { message?: string | string[] };
     const message = Array.isArray(body.message)
       ? body.message.join(', ')

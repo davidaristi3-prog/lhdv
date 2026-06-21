@@ -11,7 +11,7 @@ import { AuthController } from './auth.controller';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET') ?? 'dev-secret',
-        signOptions: { expiresIn: '12h' },
+        signOptions: { expiresIn: '30d' },
       }),
     }),
   ],
