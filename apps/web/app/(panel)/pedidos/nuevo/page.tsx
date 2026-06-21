@@ -20,7 +20,7 @@ import type {
 interface DraftItem {
   productId: string;
   variantId: string;
-  quantity: number;
+  quantity: number | ''; // '' = vacío momentáneo mientras se edita; al salir del campo vuelve a 1
   customText: string;
   additionIds: string[];
 }
@@ -118,7 +118,7 @@ export default function NuevoPedidoPage() {
     return items.reduce((sum, it) => {
       const v = variantById.get(it.variantId);
       const adds = it.additionIds.reduce((s, id) => s + (additionById.get(id)?.priceCop ?? 0), 0);
-      return sum + (v ? v.priceCop * it.quantity + adds : 0);
+      return sum + (v ? v.priceCop * (it.quantity || 1) + adds : 0);
     }, 0);
   }, [items, variantById, additionById]);
 
@@ -180,7 +180,7 @@ export default function NuevoPedidoPage() {
           ...deliveryFields,
           items: items.map((it) => ({
             productVariantId: it.variantId,
-            quantity: it.quantity,
+            quantity: Number(it.quantity) || 1,
             customText: it.customText || undefined,
             additions: it.additionIds.map((additionId) => ({ additionId })),
           })),
@@ -371,7 +371,13 @@ export default function NuevoPedidoPage() {
                       type="number"
                       min={1}
                       value={it.quantity}
-                      onChange={(e) => updateItem(i, { quantity: Math.max(1, Number(e.target.value)) })}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        updateItem(i, { quantity: v === '' ? '' : Math.max(1, Number(v)) });
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value === '' || Number(e.target.value) < 1) updateItem(i, { quantity: 1 });
+                      }}
                       className={`col-span-2 ${field}`}
                     />
                     <button
