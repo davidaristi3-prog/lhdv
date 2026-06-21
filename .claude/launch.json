@@ -4,7 +4,7 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@lhdv/web", "start"],
+      "runtimeArgs": ["--filter", "@lhdv/web", "dev"],
       "port": 3000
     }
   ]

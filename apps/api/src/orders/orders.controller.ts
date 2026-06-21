@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { OrderStatus, UserRole } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -51,6 +51,13 @@ export class OrdersController {
       byUserId: user.sub,
       reason: dto.reason,
       actingRole: user.role,
+      scrap: dto.scrap,
     });
+  }
+
+  @Roles(UserRole.OWNER, UserRole.SALES)
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.orders.deleteDraft(id);
   }
 }

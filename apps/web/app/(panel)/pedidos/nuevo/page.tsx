@@ -162,7 +162,11 @@ export default function NuevoPedidoPage() {
   async function submit(confirm: boolean) {
     setError(null);
     if (!customerPhone) return setError('Indicá el WhatsApp del cliente');
-    if (items.some((it) => !it.variantId)) return setError('Cada renglón necesita un producto y tamaño');
+    // Solo cuentan los renglones con producto y tamaño; un borrador puede ir sin productos.
+    const validItems = items.filter((it) => it.variantId);
+    if (confirm && validItems.length === 0) {
+      return setError('Para enviar a cocina agregá al menos un producto');
+    }
 
     const usingSaved = !isPickup && selectedAddressId !== '' && selectedAddressId !== NEW_ADDRESS;
     const deliveryFields = isPickup
@@ -193,7 +197,7 @@ export default function NuevoPedidoPage() {
           deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
           notes: notes || undefined,
           ...deliveryFields,
-          items: items.map((it) => ({
+          items: validItems.map((it) => ({
             productVariantId: it.variantId,
             quantity: Number(it.quantity) || 1,
             customText: it.customText || undefined,

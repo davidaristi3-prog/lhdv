@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { OrderStatus } from '@prisma/client';
 
 export class TransitionOrderDto {
@@ -8,4 +8,10 @@ export class TransitionOrderDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  /** Solo al volver de producción a confirmado: true = dar de baja (merma, NO
+   *  repone inventario); false/ausente = devolver (repone los insumos). */
+  @IsOptional()
+  @IsBoolean()
+  scrap?: boolean;
 }

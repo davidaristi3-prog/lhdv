@@ -1,5 +1,4 @@
 import {
-  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -63,11 +62,13 @@ export class CreateOrderDto {
   @IsEnum(OrderChannel)
   channel!: OrderChannel;
 
+  // Borrador (confirm=false) admite ir sin productos; para cocina (confirm=true)
+  // el servicio exige al menos uno.
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
-  items!: OrderItemDto[];
+  items?: OrderItemDto[];
 
   @IsOptional()
   @IsBoolean()

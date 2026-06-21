@@ -20,6 +20,8 @@ interface TransitionOptions {
   reason?: string;
   /** Rol del usuario que ejecuta, para aplicar restricciones (Ventas = solo consulta de cocina). */
   actingRole?: UserRole;
+  /** Al volver de producción a confirmado: true = baja (merma, no repone inventario). */
+  scrap?: boolean;
 }
 
 /** Estados que ve el tablero de cocina, en orden de flujo. */
@@ -74,23 +76,28 @@ export class OrdersService {
   // ─── Creación manual (Fase 1) ───────────────────────────────
 
   async createManual(dto: CreateOrderDto, userId: string) {
+    const items = dto.items ?? [];
+    // Para enviar a cocina hace falta al menos un producto; un borrador puede ir vacío.
+    if (dto.confirm && items.length === 0) {
+      throw new BadRequestException('Para enviar a cocina agregá al menos un producto');
+    }
     const customerId = await this.resolveCustomer(dto);
 
     // Cargar variantes y adiciones para fijar precios (snapshots).
-    const variantIds = dto.items.map((i) => i.productVariantId);
+    const variantIds = items.map((i) => i.productVariantId);
     const variants = await this.prisma.productVariant.findMany({
       where: { id: { in: variantIds } },
     });
     const variantById = new Map(variants.map((v) => [v.id, v]));
 
-    const additionIds = dto.items.flatMap((i) => (i.additions ?? []).map((a) => a.additionId));
+    const additionIds = items.flatMap((i) => (i.additions ?? []).map((a) => a.additionId));
     const additions = additionIds.length
       ? await this.prisma.addition.findMany({ where: { id: { in: additionIds } } })
       : [];
     const additionById = new Map(additions.map((a) => [a.id, a]));
 
     let subtotal = 0;
-    const itemsData: Prisma.OrderItemCreateWithoutOrderInput[] = dto.items.map((item) => {
+    const itemsData: Prisma.OrderItemCreateWithoutOrderInput[] = items.map((item) => {
       const variant = variantById.get(item.productVariantId);
       if (!variant) throw new BadRequestException(`Variante ${item.productVariantId} no existe`);
 
@@ -240,30 +247,33 @@ export class OrdersService {
         await tx.order.update({ where: { id: orderId }, data: { inventoryDeductedAt: new Date() } });
       }
 
-      // Inventario: devolver de producción a confirmado repone los insumos que se
-      // habían descontado, para que el stock quede coherente (si vuelve a entrar a
-      // producción, se descuentan de nuevo). Se repone exactamente lo consumido.
+      // Volver de producción a confirmado (devolver o dar de baja). En ambos casos
+      // se limpia inventoryDeductedAt para que, al reentrar a producción, se vuelva
+      // a descontar. "Devolver" repone los insumos (no se gastaron); "Baja" (scrap)
+      // NO los repone: el producto salió mal y esa merma queda reflejada en el stock.
       if (to === 'CONFIRMED' && from === 'IN_PRODUCTION' && order.inventoryDeductedAt != null) {
-        const consumed = await tx.inventoryMovement.findMany({
-          where: { orderId, type: 'CONSUMPTION' },
-          select: { ingredientId: true, quantity: true },
-        });
-        for (const m of consumed) {
-          await tx.ingredient.update({
-            where: { id: m.ingredientId },
-            data: { stockQty: { increment: m.quantity } },
+        if (!opts.scrap) {
+          const consumed = await tx.inventoryMovement.findMany({
+            where: { orderId, type: 'CONSUMPTION' },
+            select: { ingredientId: true, quantity: true },
           });
-        }
-        if (consumed.length > 0) {
-          await tx.inventoryMovement.createMany({
-            data: consumed.map((m) => ({
-              ingredientId: m.ingredientId,
-              type: 'ADJUSTMENT' as const,
-              quantity: m.quantity,
-              orderId,
-              reason: 'Devuelto de producción',
-            })),
-          });
+          for (const m of consumed) {
+            await tx.ingredient.update({
+              where: { id: m.ingredientId },
+              data: { stockQty: { increment: m.quantity } },
+            });
+          }
+          if (consumed.length > 0) {
+            await tx.inventoryMovement.createMany({
+              data: consumed.map((m) => ({
+                ingredientId: m.ingredientId,
+                type: 'ADJUSTMENT' as const,
+                quantity: m.quantity,
+                orderId,
+                reason: 'Devuelto de producción',
+              })),
+            });
+          }
         }
         await tx.order.update({ where: { id: orderId }, data: { inventoryDeductedAt: null } });
       }
@@ -310,6 +320,20 @@ export class OrdersService {
       });
       return updated;
     });
+  }
+
+  /** Descarta (elimina) un borrador. Solo DRAFT, que no tocó nada; la cascada borra items y eventos. */
+  async deleteDraft(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (!order) throw new NotFoundException(`Pedido ${orderId} no existe`);
+    if (order.status !== 'DRAFT') {
+      throw new BadRequestException('Solo se pueden descartar pedidos en borrador');
+    }
+    await this.prisma.order.delete({ where: { id: orderId } });
+    return { deleted: true };
   }
 
   // ─── Helpers ────────────────────────────────────────────────

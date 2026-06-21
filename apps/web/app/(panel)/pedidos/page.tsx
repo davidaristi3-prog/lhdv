@@ -54,6 +54,19 @@ export default function PedidosPage() {
     }
   }
 
+  async function descartar(id: string) {
+    if (!confirm('¿Descartar este borrador? Se elimina y no se puede recuperar.')) return;
+    setBusyId(id);
+    try {
+      await api(`/orders/${id}`, { method: 'DELETE' });
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
@@ -152,6 +165,13 @@ export default function PedidosPage() {
                           className="rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
                         >
                           {busyId === o.id ? 'Enviando…' : 'Enviar a cocina'}
+                        </button>
+                        <button
+                          onClick={() => descartar(o.id)}
+                          disabled={busyId === o.id}
+                          className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Descartar
                         </button>
                       </div>
                     </td>

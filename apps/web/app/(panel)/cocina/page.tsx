@@ -24,12 +24,12 @@ export default function CocinaPage() {
   const readOnly = user?.role === 'SALES';
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function move(orderId: string, to: OrderStatus) {
+  async function move(orderId: string, to: OrderStatus, scrap?: boolean) {
     setBusyId(orderId);
     try {
       await api(`/orders/${orderId}/transition`, {
         method: 'PATCH',
-        body: JSON.stringify({ to }),
+        body: JSON.stringify({ to, scrap }),
       });
       await reload();
     } catch (e) {
@@ -97,25 +97,35 @@ export default function CocinaPage() {
                           {o.customer.name ?? o.customer.whatsappPhone}
                         </p>
                         {!readOnly && (step || o.status === 'IN_PRODUCTION') && (
-                          <div className="mt-2 flex gap-1.5">
-                            {o.status === 'IN_PRODUCTION' && (
-                              <button
-                                onClick={() => move(o.id, 'CONFIRMED')}
-                                disabled={busyId === o.id}
-                                className="rounded-md border border-neutral-300 px-2 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
-                                title="Devolver a Confirmado (repone los insumos)"
-                              >
-                                ← Devolver
-                              </button>
-                            )}
+                          <div className="mt-2 flex items-stretch gap-1.5">
                             {step && (
                               <button
                                 onClick={() => move(o.id, step.to)}
                                 disabled={busyId === o.id}
-                                className="flex-1 rounded-md bg-neutral-900 px-2 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+                                className="flex-1 rounded-md bg-neutral-900 px-2 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
                               >
                                 {step.label} →
                               </button>
+                            )}
+                            {o.status === 'IN_PRODUCTION' && (
+                              <>
+                                <button
+                                  onClick={() => move(o.id, 'CONFIRMED')}
+                                  disabled={busyId === o.id}
+                                  className="rounded-md border border-neutral-300 px-2 text-xs font-medium text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
+                                  title="Devolver a Confirmado: repone los insumos (si te equivocaste y no se horneó)"
+                                >
+                                  Devolver
+                                </button>
+                                <button
+                                  onClick={() => move(o.id, 'CONFIRMED', true)}
+                                  disabled={busyId === o.id}
+                                  className="rounded-md border border-red-200 px-1.5 text-[10px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
+                                  title="Dar de baja: producto no apto. Vuelve a Confirmado para rehacerlo; los insumos usados NO se reponen (merma)."
+                                >
+                                  Baja
+                                </button>
+                              </>
                             )}
                           </div>
                         )}
