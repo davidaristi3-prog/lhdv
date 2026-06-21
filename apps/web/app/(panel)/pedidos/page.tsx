@@ -154,10 +154,10 @@ export default function PedidosPage() {
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <Link
-                          href={`/pedidos/${o.id}`}
+                          href={`/pedidos/nuevo?id=${o.id}`}
                           className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
                         >
-                          Abrir
+                          Editar
                         </Link>
                         <button
                           onClick={() => enviarACocina(o.id)}

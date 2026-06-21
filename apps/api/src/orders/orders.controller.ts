@@ -41,6 +41,12 @@ export class OrdersController {
     });
   }
 
+  @Roles(UserRole.OWNER, UserRole.SALES)
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: CreateOrderDto) {
+    return this.orders.updateDraft(id, dto);
+  }
+
   @Patch(':id/transition')
   transition(
     @Param('id') id: string,

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { formatCop } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -29,8 +29,9 @@ interface DraftItem {
 const emptyItem: DraftItem = { productId: '', variantId: '', quantity: 1, customText: '', additionIds: [] };
 const NEW_ADDRESS = '__new__';
 
-export default function NuevoPedidoPage() {
+function NuevoPedidoInner() {
   const router = useRouter();
+  const editId = useSearchParams().get('id');
   const { user } = useAuth();
   const { data: products } = useApi<Product[]>('/catalog/products');
   const { data: additions } = useApi<Addition[]>('/catalog/additions');
@@ -55,11 +56,59 @@ export default function NuevoPedidoPage() {
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<'draft' | 'cocina' | null>(null);
+  const [pendingZoneName, setPendingZoneName] = useState<string | null>(null);
+  const preloaded = useRef(false);
 
   // El rol Domicilios no puede crear pedidos: si entra por URL, lo devolvemos.
   useEffect(() => {
     if (user && user.role === 'DELIVERY') router.replace('/pedidos');
   }, [user, router]);
+
+  // Edición de borrador: precargar el pedido una sola vez.
+  useEffect(() => {
+    if (!editId || preloaded.current) return;
+    preloaded.current = true;
+    void (async () => {
+      try {
+        const o = await api<Order>(`/orders/${editId}`);
+        setCustomerPhone(o.customer.whatsappPhone);
+        setCustomerName(o.customer.name ?? '');
+        if (o.items.length) {
+          setItems(
+            o.items.map((it) => ({
+              productId: it.variant.product.id,
+              variantId: it.variant.id,
+              quantity: it.quantity,
+              customText: it.customText ?? '',
+              additionIds: it.additions?.map((a) => a.addition.id) ?? [],
+            })),
+          );
+        }
+        if (o.deliveryType) setDeliveryType(o.deliveryType);
+        if (o.deliveryDate) setDeliveryDate(o.deliveryDate.slice(0, 10));
+        if (o.deliveryAddress) setDeliveryAddress(o.deliveryAddress);
+        if (o.customerAddressId) setSelectedAddressId(o.customerAddressId);
+        if (o.deliveryCostCop) setDeliveryCost(o.deliveryCostCop);
+        if (o.notes) setNotes(o.notes);
+        setIsCustom(o.isCustom);
+        setPendingZoneName(o.deliveryZone ?? null);
+        const found = await api<Customer | undefined>(
+          `/customers/lookup?phone=${encodeURIComponent(o.customer.whatsappPhone)}`,
+        );
+        if (found?.addresses?.length) setAddresses(found.addresses);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    })();
+  }, [editId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mapear la zona guardada del borrador cuando el catálogo de zonas ya esté.
+  useEffect(() => {
+    if (!pendingZoneName || !zones) return;
+    const z = zones.find((x) => x.name === pendingZoneName);
+    if (z) setSelectedZoneId(z.id);
+    setPendingZoneName(null);
+  }, [pendingZoneName, zones]);
 
   // Fechas rápidas para la entrega (formato YYYY-MM-DD del input date).
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -184,28 +233,33 @@ export default function NuevoPedidoPage() {
         };
 
     setSubmitting(confirm ? 'cocina' : 'draft');
+    const payload = {
+      customerPhone,
+      customerName: customerName || undefined,
+      channel: 'MANUAL',
+      isCustom,
+      confirm,
+      deliveryType,
+      deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
+      notes: notes || undefined,
+      ...deliveryFields,
+      items: validItems.map((it) => ({
+        productVariantId: it.variantId,
+        quantity: Number(it.quantity) || 1,
+        customText: it.customText || undefined,
+        additions: it.additionIds.map((additionId) => ({ additionId })),
+      })),
+    };
     try {
-      const order = await api<Order>('/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          customerPhone,
-          customerName: customerName || undefined,
-          channel: 'MANUAL',
-          isCustom,
-          confirm,
-          deliveryType,
-          deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
-          notes: notes || undefined,
-          ...deliveryFields,
-          items: validItems.map((it) => ({
-            productVariantId: it.variantId,
-            quantity: Number(it.quantity) || 1,
-            customText: it.customText || undefined,
-            additions: it.additionIds.map((additionId) => ({ additionId })),
-          })),
-        }),
-      });
-      router.push(confirm ? '/cocina' : `/pedidos/${order.id}`);
+      if (editId) {
+        // Guardar los cambios del borrador; si se pidió, enviarlo a cocina.
+        await api<Order>(`/orders/${editId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        if (confirm) await api(`/orders/${editId}/confirm`, { method: 'POST' });
+        router.push(confirm ? '/cocina' : '/pedidos');
+      } else {
+        const order = await api<Order>('/orders', { method: 'POST', body: JSON.stringify(payload) });
+        router.push(confirm ? '/cocina' : `/pedidos/${order.id}`);
+      }
     } catch (e) {
       setError((e as Error).message);
       setSubmitting(null);
@@ -218,7 +272,7 @@ export default function NuevoPedidoPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="mb-5 text-lg font-semibold">Nuevo pedido</h1>
+      <h1 className="mb-5 text-lg font-semibold">{editId ? 'Editar borrador' : 'Nuevo pedido'}</h1>
 
       <div className="space-y-5">
         {/* 1 · Cliente */}
@@ -505,19 +559,27 @@ export default function NuevoPedidoPage() {
                 disabled={submitting !== null}
                 className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
               >
-                {submitting === 'draft' ? 'Guardando…' : 'Guardar borrador'}
+                {submitting === 'draft' ? 'Guardando…' : editId ? 'Guardar cambios' : 'Guardar borrador'}
               </button>
               <button
                 onClick={() => submit(true)}
                 disabled={submitting !== null}
                 className="rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
               >
-                {submitting === 'cocina' ? 'Enviando…' : 'Crear y enviar a cocina'}
+                {submitting === 'cocina' ? 'Enviando…' : editId ? 'Enviar a cocina' : 'Crear y enviar a cocina'}
               </button>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NuevoPedidoPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center text-neutral-500">Cargando…</div>}>
+      <NuevoPedidoInner />
+    </Suspense>
   );
 }

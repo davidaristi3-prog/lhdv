@@ -84,41 +84,7 @@ export class OrdersService {
     const customerId = await this.resolveCustomer(dto);
 
     // Cargar variantes y adiciones para fijar precios (snapshots).
-    const variantIds = items.map((i) => i.productVariantId);
-    const variants = await this.prisma.productVariant.findMany({
-      where: { id: { in: variantIds } },
-    });
-    const variantById = new Map(variants.map((v) => [v.id, v]));
-
-    const additionIds = items.flatMap((i) => (i.additions ?? []).map((a) => a.additionId));
-    const additions = additionIds.length
-      ? await this.prisma.addition.findMany({ where: { id: { in: additionIds } } })
-      : [];
-    const additionById = new Map(additions.map((a) => [a.id, a]));
-
-    let subtotal = 0;
-    const itemsData: Prisma.OrderItemCreateWithoutOrderInput[] = items.map((item) => {
-      const variant = variantById.get(item.productVariantId);
-      if (!variant) throw new BadRequestException(`Variante ${item.productVariantId} no existe`);
-
-      const itemAdditions = (item.additions ?? []).map((a) => {
-        const addition = additionById.get(a.additionId);
-        if (!addition) throw new BadRequestException(`Adición ${a.additionId} no existe`);
-        return { additionId: addition.id, priceCop: addition.priceCop, quantity: a.quantity ?? 1 };
-      });
-
-      const additionsTotal = itemAdditions.reduce((s, a) => s + a.priceCop * a.quantity, 0);
-      subtotal += variant.priceCop * item.quantity + additionsTotal;
-
-      return {
-        quantity: item.quantity,
-        unitPriceCop: variant.priceCop,
-        customText: item.customText,
-        notes: item.notes,
-        variant: { connect: { id: variant.id } },
-        additions: { create: itemAdditions },
-      };
-    });
+    const { itemsData, subtotal } = await this.buildOrderItems(items);
 
     const deliveryCostCop = dto.deliveryCostCop ?? 0;
     const code = await this.nextOrderCode();
@@ -160,6 +126,89 @@ export class OrdersService {
       },
       include: this.fullInclude(),
     });
+  }
+
+  /** Calcula los OrderItem (con precios snapshot) y el subtotal a partir de los items del DTO. */
+  private async buildOrderItems(items: CreateOrderDto['items']) {
+    const list = items ?? [];
+    const variantIds = list.map((i) => i.productVariantId);
+    const variants = await this.prisma.productVariant.findMany({ where: { id: { in: variantIds } } });
+    const variantById = new Map(variants.map((v) => [v.id, v]));
+
+    const additionIds = list.flatMap((i) => (i.additions ?? []).map((a) => a.additionId));
+    const additions = additionIds.length
+      ? await this.prisma.addition.findMany({ where: { id: { in: additionIds } } })
+      : [];
+    const additionById = new Map(additions.map((a) => [a.id, a]));
+
+    let subtotal = 0;
+    const itemsData: Prisma.OrderItemCreateWithoutOrderInput[] = list.map((item) => {
+      const variant = variantById.get(item.productVariantId);
+      if (!variant) throw new BadRequestException(`Variante ${item.productVariantId} no existe`);
+
+      const itemAdditions = (item.additions ?? []).map((a) => {
+        const addition = additionById.get(a.additionId);
+        if (!addition) throw new BadRequestException(`Adición ${a.additionId} no existe`);
+        return { additionId: addition.id, priceCop: addition.priceCop, quantity: a.quantity ?? 1 };
+      });
+
+      const additionsTotal = itemAdditions.reduce((s, a) => s + a.priceCop * a.quantity, 0);
+      subtotal += variant.priceCop * item.quantity + additionsTotal;
+
+      return {
+        quantity: item.quantity,
+        unitPriceCop: variant.priceCop,
+        customText: item.customText,
+        notes: item.notes,
+        variant: { connect: { id: variant.id } },
+        additions: { create: itemAdditions },
+      };
+    });
+    return { itemsData, subtotal };
+  }
+
+  /**
+   * Edita un borrador (solo DRAFT): reemplaza los items y actualiza cliente,
+   * entrega y notas, recalculando precios. No cambia el código ni el estado.
+   */
+  async updateDraft(orderId: string, dto: CreateOrderDto) {
+    const existing = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (!existing) throw new NotFoundException(`Pedido ${orderId} no existe`);
+    if (existing.status !== 'DRAFT') {
+      throw new BadRequestException('Solo se pueden editar pedidos en borrador');
+    }
+
+    const customerId = await this.resolveCustomer(dto);
+    const { itemsData, subtotal } = await this.buildOrderItems(dto.items);
+    const deliveryCostCop = dto.deliveryCostCop ?? 0;
+    const delivery = await this.resolveAddress(customerId, dto);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.orderItem.deleteMany({ where: { orderId } });
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          isCustom: dto.isCustom ?? false,
+          deliveryType: dto.deliveryType ?? null,
+          deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : null,
+          deliveryAddress: delivery.deliveryAddress ?? null,
+          deliveryZone: delivery.deliveryZone ?? null,
+          deliveryCostCop,
+          subtotalCop: subtotal,
+          totalCop: subtotal + deliveryCostCop,
+          notes: dto.notes ?? null,
+          customer: { connect: { id: customerId } },
+          customerAddress: delivery.customerAddressId
+            ? { connect: { id: delivery.customerAddressId } }
+            : { disconnect: true },
+          items: { create: itemsData },
+        },
+      });
+    });
+    return this.get(orderId);
   }
 
   // ─── Máquina de estados ─────────────────────────────────────
@@ -303,6 +352,12 @@ export class OrdersService {
       ];
       if (!confirmable.includes(from)) {
         throw new BadRequestException(`No se puede enviar a cocina un pedido en estado ${from}`);
+      }
+
+      // No se manda a cocina un pedido sin productos (caso típico: borrador a medio armar).
+      const itemCount = await tx.orderItem.count({ where: { orderId } });
+      if (itemCount === 0) {
+        throw new BadRequestException('Agregá al menos un producto antes de enviar a cocina');
       }
 
       const updated = await tx.order.update({
