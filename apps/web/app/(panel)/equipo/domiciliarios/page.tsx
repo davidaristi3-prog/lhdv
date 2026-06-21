@@ -10,6 +10,8 @@ import type { Courier, CourierVehicle, DeliveryZone } from '@/lib/types';
 const field = 'rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
 const btn = 'rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-40';
 const VEHICLES: CourierVehicle[] = ['MOTO', 'CARRO'];
+// Capacidad sugerida por vehículo, en "tortas grandes" equivalentes (ajustable).
+const CAPACITY_PRESET: Record<CourierVehicle, number> = { MOTO: 5, CARRO: 15 };
 
 export default function DomiciliariosPage() {
   const { data: couriers, loading, error, reload } = useApi<Courier[]>('/couriers');
@@ -117,12 +119,17 @@ function CourierCard({
       </div>
 
       {/* Perfil: vehículo + capacidad */}
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      <div className="mb-1 flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs text-neutral-500">Vehículo</label>
           <select
             value={vehicle}
-            onChange={(e) => setVehicle(e.target.value as CourierVehicle | '')}
+            onChange={(e) => {
+              const v = e.target.value as CourierVehicle | '';
+              setVehicle(v);
+              // Al elegir vehículo, sugerimos su capacidad típica si está vacía.
+              if (v && capacity === '') setCapacity(String(CAPACITY_PRESET[v]));
+            }}
             className={field}
           >
             <option value="">—</option>
@@ -134,10 +141,11 @@ function CourierCard({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-500">Capacidad (carga máx.)</label>
+          <label className="mb-1 block text-xs text-neutral-500">Capacidad (tortas grandes)</label>
           <input
             type="number"
             min={1}
+            step={1}
             placeholder="Sin límite"
             value={capacity}
             onChange={(e) => setCapacity(e.target.value)}
@@ -148,6 +156,11 @@ function CourierCard({
           {busy === 'profile' ? 'Guardando…' : 'Guardar perfil'}
         </button>
       </div>
+      <p className="mb-4 text-xs text-neutral-400">
+        La capacidad se mide en <b>tortas grandes</b>: una torta grande = 1. Cada producto define cuánto
+        ocupa en el Catálogo (una caja mediana ≈ 0.5). Ej.: una moto lleva ~5 tortas grandes, o 2 grandes
+        + 3 medianas. Al armar la ruta, el sistema suma y avisa si se pasa.
+      </p>
 
       {/* Zonas + tarifa de pago */}
       <div className="border-t border-neutral-100 pt-3">

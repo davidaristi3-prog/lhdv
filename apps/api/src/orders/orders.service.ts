@@ -240,6 +240,34 @@ export class OrdersService {
         await tx.order.update({ where: { id: orderId }, data: { inventoryDeductedAt: new Date() } });
       }
 
+      // Inventario: devolver de producción a confirmado repone los insumos que se
+      // habían descontado, para que el stock quede coherente (si vuelve a entrar a
+      // producción, se descuentan de nuevo). Se repone exactamente lo consumido.
+      if (to === 'CONFIRMED' && from === 'IN_PRODUCTION' && order.inventoryDeductedAt != null) {
+        const consumed = await tx.inventoryMovement.findMany({
+          where: { orderId, type: 'CONSUMPTION' },
+          select: { ingredientId: true, quantity: true },
+        });
+        for (const m of consumed) {
+          await tx.ingredient.update({
+            where: { id: m.ingredientId },
+            data: { stockQty: { increment: m.quantity } },
+          });
+        }
+        if (consumed.length > 0) {
+          await tx.inventoryMovement.createMany({
+            data: consumed.map((m) => ({
+              ingredientId: m.ingredientId,
+              type: 'ADJUSTMENT' as const,
+              quantity: m.quantity,
+              orderId,
+              reason: 'Devuelto de producción',
+            })),
+          });
+        }
+        await tx.order.update({ where: { id: orderId }, data: { inventoryDeductedAt: null } });
+      }
+
       return updated;
     }, { maxWait: 10000, timeout: 20000 });
   }

@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Min,
@@ -21,8 +22,8 @@ export class CreateVariantDto {
   weightGrams?: number;
 
   @IsOptional()
-  @IsInt()
-  @Min(1)
+  @IsNumber()
+  @Min(0.1)
   capacityLoad?: number;
 
   @IsInt()
@@ -91,8 +92,8 @@ export class UpdateVariantDto {
   weightGrams?: number;
 
   @IsOptional()
-  @IsInt()
-  @Min(1)
+  @IsNumber()
+  @Min(0.1)
   capacityLoad?: number;
 
   @IsOptional()

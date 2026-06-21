@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { formatCop } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { useAuth } from '@/lib/auth';
 import { StatusBadge } from '@/app/components/StatusBadge';
 import { CHANNEL_LABEL, formatDate } from '@/lib/labels';
 import type { Order } from '@/lib/types';
@@ -27,6 +28,8 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function PedidosPage() {
+  const { user } = useAuth();
+  const canCreate = user?.role === 'OWNER' || user?.role === 'SALES';
   const { data: orders, loading, error, reload } = useApi<Order[]>('/orders');
   const [tab, setTab] = useState<Tab>('activos');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -55,12 +58,14 @@ export default function PedidosPage() {
     <div>
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-lg font-semibold">Pedidos</h1>
-        <Link
-          href="/pedidos/nuevo"
-          className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-        >
-          + Nuevo pedido
-        </Link>
+        {canCreate && (
+          <Link
+            href="/pedidos/nuevo"
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+          >
+            + Nuevo pedido
+          </Link>
+        )}
       </div>
 
       {/* Pestañas: Activos (lo que importa) · Borradores (a la mano) · Entregados (archivo) */}

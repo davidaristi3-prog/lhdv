@@ -124,13 +124,17 @@ function VariantRow({ variant, onChange }: { variant: Variant; onChange: () => v
           className={`w-24 ${field}`}
         />
       </label>
-      <label className="flex items-center gap-1 text-xs text-neutral-400" title="Carga: cuánto ocupa en la ruta del domiciliario">
+      <label
+        className="flex items-center gap-1 text-xs text-neutral-400"
+        title="Carga en 'tortas grandes': cuánto ocupa en la moto/carro (grande = 1, mediana ≈ 0.5)"
+      >
         carga
         <input
           type="number"
-          min={1}
+          min={0.1}
+          step={0.5}
           value={load}
-          onChange={(e) => setLoad(Math.max(1, Number(e.target.value)))}
+          onChange={(e) => setLoad(Number(e.target.value))}
           className={`w-16 ${field}`}
         />
       </label>
@@ -183,13 +187,17 @@ function NewVariant({ productId, onCreated }: { productId: string; onCreated: ()
         onChange={(e) => setWholesale(Number(e.target.value))}
         className={`w-28 ${field}`}
       />
-      <label className="flex items-center gap-1 text-xs text-neutral-400">
+      <label
+        className="flex items-center gap-1 text-xs text-neutral-400"
+        title="En 'tortas grandes': grande = 1, mediana ≈ 0.5"
+      >
         carga
         <input
           type="number"
-          min={1}
+          min={0.1}
+          step={0.5}
           value={load}
-          onChange={(e) => setLoad(Math.max(1, Number(e.target.value)))}
+          onChange={(e) => setLoad(Number(e.target.value))}
           className={`w-16 ${field}`}
         />
       </label>

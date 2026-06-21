@@ -24,14 +24,12 @@ export default function CocinaPage() {
   const readOnly = user?.role === 'SALES';
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function advance(order: Order) {
-    const step = FORWARD[order.status];
-    if (!step) return;
-    setBusyId(order.id);
+  async function move(orderId: string, to: OrderStatus) {
+    setBusyId(orderId);
     try {
-      await api(`/orders/${order.id}/transition`, {
+      await api(`/orders/${orderId}/transition`, {
         method: 'PATCH',
-        body: JSON.stringify({ to: step.to }),
+        body: JSON.stringify({ to }),
       });
       await reload();
     } catch (e) {
@@ -98,14 +96,28 @@ export default function CocinaPage() {
                         <p className="mt-2 text-xs text-neutral-400">
                           {o.customer.name ?? o.customer.whatsappPhone}
                         </p>
-                        {step && !readOnly && (
-                          <button
-                            onClick={() => advance(o)}
-                            disabled={busyId === o.id}
-                            className="mt-2 w-full rounded-md bg-neutral-900 px-2 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-                          >
-                            {step.label} →
-                          </button>
+                        {!readOnly && (step || o.status === 'IN_PRODUCTION') && (
+                          <div className="mt-2 flex gap-1.5">
+                            {o.status === 'IN_PRODUCTION' && (
+                              <button
+                                onClick={() => move(o.id, 'CONFIRMED')}
+                                disabled={busyId === o.id}
+                                className="rounded-md border border-neutral-300 px-2 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
+                                title="Devolver a Confirmado (repone los insumos)"
+                              >
+                                ← Devolver
+                              </button>
+                            )}
+                            {step && (
+                              <button
+                                onClick={() => move(o.id, step.to)}
+                                disabled={busyId === o.id}
+                                className="flex-1 rounded-md bg-neutral-900 px-2 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+                              >
+                                {step.label} →
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     );

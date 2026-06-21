@@ -301,3 +301,16 @@ export interface SuggestResponse {
   groups: SuggestGroup[];
   unassigned: { order: Order; load: number; reason: string }[];
 }
+
+// Estado de cuenta del domiciliario (su propia sesión).
+export interface CourierAccountStat {
+  count: number;
+  totalCop: number;
+}
+
+export interface CourierAccount {
+  week: CourierAccountStat;
+  month: CourierAccountStat;
+  pending: CourierAccountStat;
+  settlements: CourierSettlement[];
+}

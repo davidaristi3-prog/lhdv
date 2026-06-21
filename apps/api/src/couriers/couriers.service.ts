@@ -78,4 +78,48 @@ export class CouriersService {
     });
     return this.get(id);
   }
+
+  /**
+   * Estado de cuenta del domiciliario (para su propia sesión): lo ganado esta
+   * semana y este mes, lo pendiente de liquidar y el historial de liquidaciones.
+   * `courierId` es el id de usuario del domiciliario.
+   */
+  async myAccount(courierId: string) {
+    const now = new Date();
+    const dow = (now.getDay() + 6) % 7; // 0 = lunes
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const payOf = (orders: { courierPayCop: number | null }[]) => ({
+      count: orders.length,
+      totalCop: orders.reduce((s, o) => s + (o.courierPayCop ?? 0), 0),
+    });
+
+    const [week, month, pending, settlements] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { deliveredByCourierId: courierId, deliveredAt: { gte: startOfWeek } },
+        select: { courierPayCop: true },
+      }),
+      this.prisma.order.findMany({
+        where: { deliveredByCourierId: courierId, deliveredAt: { gte: startOfMonth } },
+        select: { courierPayCop: true },
+      }),
+      this.prisma.order.findMany({
+        where: { deliveredByCourierId: courierId, settlementId: null },
+        select: { courierPayCop: true },
+      }),
+      this.prisma.courierSettlement.findMany({
+        where: { courierId },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+      }),
+    ]);
+
+    return {
+      week: payOf(week),
+      month: payOf(month),
+      pending: payOf(pending),
+      settlements,
+    };
+  }
 }

@@ -3,11 +3,21 @@ import { UserRole } from '@prisma/client';
 import { CouriersService } from './couriers.service';
 import { SetZoneRatesDto, UpdateCourierProfileDto } from './dto/courier.dto';
 import { Roles } from '../auth/roles.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtPayload } from '../auth/jwt-payload.interface';
 
 @Roles(UserRole.OWNER)
 @Controller('couriers')
 export class CouriersController {
   constructor(private readonly couriers: CouriersService) {}
+
+  // El domiciliario consulta SU propio estado de cuenta. Declarado antes de
+  // `:id` y con rol DELIVERY (sobrescribe el @Roles(OWNER) de la clase).
+  @Roles(UserRole.DELIVERY, UserRole.OWNER)
+  @Get('me/account')
+  myAccount(@CurrentUser() user: JwtPayload) {
+    return this.couriers.myAccount(user.sub);
+  }
 
   @Get()
   list() {

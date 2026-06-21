@@ -149,7 +149,7 @@ model ProductVariant {
   productId    String
   name         String // p.ej. "Mediana"
   weightGrams  Int? // peso por tamaño (material pendiente de la propietaria)
-  capacityLoad Int     @default(1) // "carga" que ocupa esta presentación en una ruta
+  capacityLoad Float   @default(1) // carga en "tortas grandes" equivalentes (grande=1, mediana=0.5…)
   priceCop     Int // precio al cliente final
   wholesalePriceCop Int? // precio a vendedor/mayorista (opcional)
   active       Boolean @default(true)

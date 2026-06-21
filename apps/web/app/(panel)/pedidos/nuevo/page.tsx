@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCop } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { useAuth } from '@/lib/auth';
 import { detectZone } from '@/lib/zones';
 import { DELIVERY_LABEL } from '@/lib/labels';
 import type {
@@ -30,6 +31,7 @@ const NEW_ADDRESS = '__new__';
 
 export default function NuevoPedidoPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const { data: products } = useApi<Product[]>('/catalog/products');
   const { data: additions } = useApi<Addition[]>('/catalog/additions');
   const { data: zones } = useApi<DeliveryZone[]>('/delivery-zones');
@@ -53,6 +55,19 @@ export default function NuevoPedidoPage() {
   const [isCustom, setIsCustom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<'draft' | 'cocina' | null>(null);
+
+  // El rol Domicilios no puede crear pedidos: si entra por URL, lo devolvemos.
+  useEffect(() => {
+    if (user && user.role === 'DELIVERY') router.replace('/pedidos');
+  }, [user, router]);
+
+  // Fechas rápidas para la entrega (formato YYYY-MM-DD del input date).
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const todayStr = dateStr(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowStr = dateStr(tomorrowDate);
 
   // ─── Zona ───────────────────────────────────────────────────
   function setZone(id: string, auto: boolean) {
@@ -248,12 +263,33 @@ export default function NuevoPedidoPage() {
                 </option>
               ))}
             </select>
-            <input
-              type="date"
-              value={deliveryDate}
-              onChange={(e) => setDeliveryDate(e.target.value)}
-              className={field}
-            />
+            <div>
+              <input
+                type="date"
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                className={`w-full ${field}`}
+              />
+              <div className="mt-1 flex gap-1">
+                {[
+                  { label: 'Hoy', value: todayStr },
+                  { label: 'Mañana', value: tomorrowStr },
+                ].map((q) => (
+                  <button
+                    key={q.label}
+                    type="button"
+                    onClick={() => setDeliveryDate(q.value)}
+                    className={`flex-1 rounded-md border px-2 py-1 text-xs font-medium ${
+                      deliveryDate === q.value
+                        ? 'border-neutral-900 bg-neutral-900 text-white'
+                        : 'border-neutral-300 text-neutral-600 hover:bg-neutral-100'
+                    }`}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {!isPickup && (
               <>
@@ -327,15 +363,7 @@ export default function NuevoPedidoPage() {
 
         {/* 3 · Productos */}
         <div className={card}>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-neutral-700">3 · Productos</h2>
-            <button
-              onClick={() => setItems((p) => [...p, { ...emptyItem }])}
-              className="text-sm font-medium text-blue-700 hover:underline"
-            >
-              + Agregar renglón
-            </button>
-          </div>
+          <h2 className="mb-3 text-sm font-semibold text-neutral-700">3 · Productos</h2>
           <div className="space-y-4">
             {items.map((it, i) => {
               const product = products?.find((p) => p.id === it.productId);
@@ -413,6 +441,12 @@ export default function NuevoPedidoPage() {
               );
             })}
           </div>
+          <button
+            onClick={() => setItems((p) => [...p, { ...emptyItem }])}
+            className="mt-3 w-full rounded-lg border border-dashed border-neutral-300 py-2 text-sm font-medium text-blue-700 hover:bg-neutral-50"
+          >
+            + Agregar otro producto
+          </button>
           <label className="mt-3 flex items-center gap-2 text-sm text-neutral-600">
             <input type="checkbox" checked={isCustom} onChange={(e) => setIsCustom(e.target.checked)} />
             Pedido personalizado (requiere revisión)
