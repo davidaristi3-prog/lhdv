@@ -56,23 +56,40 @@ export class RoutesService {
   }
 
   /**
-   * Ordena las paradas por distancia a la planta, de la más cercana a la más lejana.
-   * Para repostería (productos delicados): se sale entregando primero lo más cerca de
-   * la planta y se deja lo más lejano para el final. Las paradas sin coordenadas van al
-   * final (no se pueden medir).
+   * Ordena las paradas de la más cercana a la más lejana a la planta. Usa el tiempo REAL
+   * de manejo de Google Directions; si Google no responde (o no hay key) cae a la distancia
+   * en línea recta. Para repostería (productos delicados): lo más cerca de la planta sale
+   * primero. Las paradas sin coordenadas van al final (no se pueden medir).
    */
-  private orderByDistanceToPlant(
+  private async orderStops(
     origin: GeoResult,
     stops: { orderId: string; coords: GeoResult | null }[],
-  ) {
+  ): Promise<string[]> {
     const withCoords = stops.filter(
       (s): s is { orderId: string; coords: GeoResult } => s.coords != null,
     );
     const withoutCoords = stops.filter((s) => s.coords == null);
 
-    withCoords.sort((a, b) => haversineKm(origin, a.coords) - haversineKm(origin, b.coords));
+    // Tiempo real de manejo desde la planta a cada parada (en paralelo).
+    const seconds = await Promise.all(
+      withCoords.map((s) => this.geocoding.drivingSeconds(origin, s.coords)),
+    );
+    const allReal = seconds.length > 0 && seconds.every((d) => d != null);
 
-    return [...withCoords.map((s) => s.orderId), ...withoutCoords.map((s) => s.orderId)];
+    let ordered: { orderId: string; coords: GeoResult }[];
+    if (allReal) {
+      ordered = withCoords
+        .map((s, i) => ({ s, metric: seconds[i] as number }))
+        .sort((a, b) => a.metric - b.metric)
+        .map((x) => x.s);
+    } else {
+      // Respaldo: distancia en línea recta.
+      ordered = [...withCoords].sort(
+        (a, b) => haversineKm(origin, a.coords) - haversineKm(origin, b.coords),
+      );
+    }
+
+    return [...ordered.map((s) => s.orderId), ...withoutCoords.map((s) => s.orderId)];
   }
 
   // ─── Lectura ────────────────────────────────────────────────
@@ -212,7 +229,7 @@ export class RoutesService {
       stops.push({ orderId: o.id, coords });
     }
 
-    const orderedIds = this.orderByDistanceToPlant(this.origin(), stops);
+    const orderedIds = await this.orderStops(this.origin(), stops);
     const route = await this.prisma.deliveryRoute.create({
       data: { date: new Date(dto.date), courierId: dto.courierId ?? null },
     });
@@ -233,7 +250,7 @@ export class RoutesService {
           ? { lat: o.customerAddress.lat, lng: o.customerAddress.lng }
           : null,
     }));
-    const orderedIds = this.orderByDistanceToPlant(this.origin(), stops);
+    const orderedIds = await this.orderStops(this.origin(), stops);
     let seq = 1;
     for (const orderId of orderedIds) {
       await this.prisma.order.update({ where: { id: orderId }, data: { routeSeq: seq++ } });
