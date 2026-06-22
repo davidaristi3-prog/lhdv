@@ -20,6 +20,7 @@ import { GeocodingModule } from './geocoding/geocoding.module';
 import { RoutesModule } from './routes/routes.module';
 import { CouriersModule } from './couriers/couriers.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
+import { FinishedStockModule } from './finished-stock/finished-stock.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     RoutesModule,
     CouriersModule,
     MaintenanceModule,
+    FinishedStockModule,
   ],
   controllers: [HealthController],
   providers: [

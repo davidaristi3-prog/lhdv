@@ -34,6 +34,7 @@ const NAV: NavEntry[] = [
       { href: '/clientes', label: 'Clientes', roles: ['OWNER', 'SALES'] },
       { href: '/catalogo', label: 'Catálogo', roles: ['OWNER'] },
       { href: '/inventario', label: 'Inventario', roles: ['OWNER'] },
+      { href: '/productos-listos', label: 'Productos listos', roles: ['OWNER'] },
       { href: '/zonas', label: 'Zonas', roles: ['OWNER'] },
       { href: '/equipo', label: 'Equipo', roles: ['OWNER'] },
     ],

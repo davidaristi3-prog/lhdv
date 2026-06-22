@@ -153,10 +153,14 @@ model ProductVariant {
   priceCop     Int // precio al cliente final
   wholesalePriceCop Int? // precio a vendedor/mayorista (opcional)
   active       Boolean @default(true)
+  // Stock de producto terminado (hecho por adelantado, listo para vender sin pasar por cocina).
+  parStock     Int     @default(0) // objetivo: cuántos mantener siempre listos (0 = se hace por pedido)
+  readyStock   Int     @default(0) // existencias terminadas disponibles ahora
 
-  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems  OrderItem[]
-  recipeItems RecipeItem[]
+  product           Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems        OrderItem[]
+  recipeItems       RecipeItem[]
+  finishedMovements FinishedStockMovement[]
 
   @@unique([productId, name])
 }
@@ -224,6 +228,7 @@ model OrderItem {
   unitPriceCop     Int // snapshot del precio al momento del pedido
   customText       String? // letras / diseño
   notes            String?
+  fromStock        Boolean @default(false) // se cubrió desde el stock terminado (no se produce ni descuenta insumos)
 
   order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant   ProductVariant      @relation(fields: [productVariantId], references: [id])
@@ -493,5 +498,32 @@ model InventoryMovement {
   ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
   @@index([ingredientId])
+  @@index([orderId])
+}
+
+// ─── Inventario de producto terminado ─────────────────────────
+
+enum FinishedMoveType {
+  PRODUCTION // se produjo para stock (entra)
+  SALE // lo tomó un pedido (sale)
+  RETURN // un pedido que había tomado stock se canceló/devolvió (entra)
+  ADJUSTMENT // ajuste manual / conteo físico
+}
+
+// Rastro del stock de producto terminado por presentación. La existencia actual
+// vive en ProductVariant.readyStock; esto es el historial.
+model FinishedStockMovement {
+  id               String           @id @default(cuid())
+  productVariantId String
+  type             FinishedMoveType
+  quantity         Int // siempre positivo; el type da el signo
+  reason           String?
+  orderId          String? // si vino de un pedido (venta o devolución)
+  createdById      String?
+  createdAt        DateTime         @default(now())
+
+  variant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  @@index([productVariantId])
   @@index([orderId])
 }
