@@ -71,6 +71,13 @@ export class RoutesController {
     return this.routes.reorder(id);
   }
 
+  // Juntar dos rutas del mismo domiciliario en una (recalcula el orden).
+  @Roles(UserRole.OWNER)
+  @Post(':id/merge/:sourceId')
+  merge(@Param('id') id: string, @Param('sourceId') sourceId: string) {
+    return this.routes.mergeRoutes(id, sourceId);
+  }
+
   @Roles(UserRole.OWNER)
   @Post(':id/finish')
   finish(@Param('id') id: string) {
@@ -151,5 +158,25 @@ export class RoutesController {
       notes: dto.notes,
       photoPath: file ? `/uploads/${file.filename}` : undefined,
     });
+  }
+
+  /** Agrega la foto de evidencia a un pedido YA entregado (no cambia el estado). */
+  @Roles(UserRole.OWNER, UserRole.DELIVERY)
+  @Post('orders/:orderId/add-photo')
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: diskStorage({
+        destination: UPLOADS_DIR,
+        filename: (_req, file, cb) =>
+          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname) || '.jpg'}`),
+      }),
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  addPhoto(
+    @Param('orderId') orderId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return this.routes.addDeliveryPhoto(orderId, file ? `/uploads/${file.filename}` : undefined);
   }
 }

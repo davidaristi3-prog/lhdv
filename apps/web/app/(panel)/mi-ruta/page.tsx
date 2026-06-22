@@ -69,6 +69,30 @@ export default function MiRutaPage() {
     }
   }
 
+  // Agregar una foto a un pedido YA entregado (si antes se marcó "sin foto").
+  async function addPhoto(order: Order, file: File) {
+    setBusyId(order.id);
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/routes/orders/${order.id}/add-photo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(b.message ?? 'No se pudo agregar la foto');
+      }
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function noEntregado(order: Order, mode: 'stock' | 'reschedule') {
     setBusyId(order.id);
     try {
@@ -176,9 +200,17 @@ export default function MiRutaPage() {
                         <li key={it.id}>
                           <span className="font-medium">{it.quantity}×</span> {it.variant.product.name} ·{' '}
                           {it.variant.name}
+                          {it.customText && (
+                            <span className="ml-1 font-semibold text-amber-700">— 💬 {it.customText}</span>
+                          )}
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {o.notes && (
+                    <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+                      📝 {o.notes}
+                    </p>
                   )}
                 </div>
                 {done && <span className="text-xs font-medium text-emerald-600">Entregado</span>}
@@ -263,6 +295,27 @@ export default function MiRutaPage() {
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* Ya entregado sin foto: permitir agregarla después. */}
+              {done && !o.deliveryPhotoPath && (
+                <label className="mt-3 block cursor-pointer rounded-lg border border-neutral-300 py-2 text-center text-sm font-medium text-neutral-600 hover:bg-neutral-50">
+                  {busyId === o.id ? 'Subiendo…' : '📷 Agregar foto de entrega'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    disabled={busyId === o.id}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void addPhoto(o, f);
+                    }}
+                  />
+                </label>
+              )}
+              {done && o.deliveryPhotoPath && (
+                <p className="mt-2 text-center text-xs text-emerald-600">📷 Foto de entrega guardada</p>
               )}
             </div>
           );

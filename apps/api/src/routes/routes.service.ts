@@ -125,6 +125,46 @@ export class RoutesService {
     });
   }
 
+  /** Agrega la foto de entrega a un pedido YA entregado, sin cambiar su estado. */
+  async addDeliveryPhoto(orderId: string, photoPath?: string) {
+    if (!photoPath) throw new BadRequestException('No se recibió la foto');
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (!order) throw new BadRequestException('Pedido no encontrado');
+    if (order.status !== 'DELIVERED') {
+      throw new BadRequestException('Solo se puede agregar la foto a un pedido ya entregado');
+    }
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { deliveryPhotoPath: photoPath },
+    });
+  }
+
+  /**
+   * Junta dos rutas del MISMO domiciliario en una sola (ambas en DRAFT, sin salir aún).
+   * Mueve los pedidos de `sourceId` a `targetId`, borra la ruta vacía y recalcula el orden
+   * por cercanía de la ruta combinada (desde la planta).
+   */
+  async mergeRoutes(targetId: string, sourceId: string) {
+    if (targetId === sourceId) throw new BadRequestException('Son la misma ruta');
+    const [target, source] = await Promise.all([
+      this.prisma.deliveryRoute.findUnique({ where: { id: targetId } }),
+      this.prisma.deliveryRoute.findUnique({ where: { id: sourceId } }),
+    ]);
+    if (!target || !source) throw new BadRequestException('Una de las rutas no existe');
+    if (target.status !== 'DRAFT' || source.status !== 'DRAFT') {
+      throw new BadRequestException('Solo se pueden juntar rutas que todavía no salieron de la planta');
+    }
+    if (target.courierId !== source.courierId) {
+      throw new BadRequestException('Las rutas son de domiciliarios distintos');
+    }
+    await this.prisma.order.updateMany({ where: { routeId: sourceId }, data: { routeId: targetId } });
+    await this.prisma.deliveryRoute.delete({ where: { id: sourceId } });
+    return this.reorder(targetId);
+  }
+
   /**
    * Sugiere a qué domiciliario asignar cada pedido por enrutar: por la zona del
    * pedido (la cubre quien tiene tarifa en ella) y respetando su capacidad. Solo

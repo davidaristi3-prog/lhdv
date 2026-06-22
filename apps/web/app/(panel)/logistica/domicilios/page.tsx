@@ -41,6 +41,36 @@ export default function DomiciliosPage() {
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mergeSel, setMergeSel] = useState<Set<string>>(new Set());
+
+  function toggleMerge(id: string) {
+    setMergeSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function mergeRoutes() {
+    const ids = [...mergeSel];
+    if (ids.length < 2) return;
+    setBusy(true);
+    try {
+      // La primera es el destino; el resto se vuelcan en ella y se recalcula el orden.
+      const [target, ...sources] = ids;
+      for (const src of sources) {
+        await api(`/routes/${target}/merge/${src}`, { method: 'POST' });
+      }
+      setMergeSel(new Set());
+      routes.reload();
+      available.reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -70,6 +100,13 @@ export default function DomiciliosPage() {
       setBusy(false);
     }
   }
+
+  // Rutas marcadas para juntar; deben ser del mismo domiciliario (el backend lo revalida).
+  const selRoutes = (routes.data ?? []).filter((r) => mergeSel.has(r.id));
+  const canMerge =
+    selRoutes.length >= 2 &&
+    selRoutes[0].courierId != null &&
+    selRoutes.every((r) => r.courierId === selRoutes[0].courierId);
 
   return (
     <div className="space-y-6">
@@ -128,26 +165,53 @@ export default function DomiciliosPage() {
 
       {/* Rutas */}
       <div className="rounded-xl bg-white ring-1 ring-neutral-200">
-        <h2 className="border-b border-neutral-100 px-5 py-3 text-sm font-semibold text-neutral-700">Rutas</h2>
+        <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3">
+          <h2 className="text-sm font-semibold text-neutral-700">Rutas</h2>
+          {canMerge ? (
+            <button
+              onClick={mergeRoutes}
+              disabled={busy}
+              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+            >
+              🔗 Juntar {selRoutes.length} rutas
+            </button>
+          ) : mergeSel.size >= 2 ? (
+            <span className="text-xs text-amber-600">Deben ser del mismo domiciliario</span>
+          ) : mergeSel.size === 1 ? (
+            <span className="text-xs text-neutral-400">Marcá otra ruta del mismo domiciliario</span>
+          ) : null}
+        </div>
         {routes.data && routes.data.length === 0 && (
           <p className="p-5 text-sm text-neutral-400">Todavía no hay rutas.</p>
         )}
         <div className="divide-y divide-neutral-100">
           {routes.data?.map((r) => (
-            <Link
-              key={r.id}
-              href={`/logistica/domicilios/${r.id}`}
-              className="flex items-center justify-between px-5 py-3 text-sm hover:bg-neutral-50"
-            >
-              <div className="flex items-center gap-3">
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${ROUTE_STYLE[r.status]}`}>
-                  {ROUTE_LABEL[r.status]}
-                </span>
-                <span className="text-neutral-600">{formatDate(r.date)}</span>
-                <span className="text-neutral-500">{r.courier?.name ?? 'Sin asignar'}</span>
-              </div>
-              <span className="text-neutral-400">{r._count?.orders ?? 0} paradas</span>
-            </Link>
+            <div key={r.id} className="flex items-center gap-3 px-5 py-3 text-sm hover:bg-neutral-50">
+              {r.status === 'DRAFT' ? (
+                <input
+                  type="checkbox"
+                  checked={mergeSel.has(r.id)}
+                  onChange={() => toggleMerge(r.id)}
+                  title="Marcar para juntar con otra ruta del mismo domiciliario"
+                  className="shrink-0"
+                />
+              ) : (
+                <span className="w-4 shrink-0" />
+              )}
+              <Link
+                href={`/logistica/domicilios/${r.id}`}
+                className="flex flex-1 items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${ROUTE_STYLE[r.status]}`}>
+                    {ROUTE_LABEL[r.status]}
+                  </span>
+                  <span className="text-neutral-600">{formatDate(r.date)}</span>
+                  <span className="text-neutral-500">{r.courier?.name ?? 'Sin asignar'}</span>
+                </div>
+                <span className="text-neutral-400">{r._count?.orders ?? 0} paradas</span>
+              </Link>
+            </div>
           ))}
         </div>
       </div>

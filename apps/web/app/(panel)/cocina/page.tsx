@@ -118,10 +118,12 @@ export default function CocinaPage() {
   function renderCard(o: Order, later: boolean) {
     const step = FORWARD[o.status];
     const days = daysUntil(o.deliveryDate);
+    // Resaltar el pedido si trae cualquier observación (general o por producto).
+    const hasObs = !!o.notes || o.items.some((it) => it.customText);
     return (
       <div
         key={o.id}
-        className={`rounded-lg bg-white p-3 shadow-sm ring-1 ring-neutral-200 ${later ? 'opacity-70' : ''}`}
+        className={`rounded-lg bg-white p-3 shadow-sm ${hasObs ? 'ring-2 ring-amber-400' : 'ring-1 ring-neutral-200'} ${later ? 'opacity-70' : ''}`}
       >
         {/* Encabezado secundario: código + fecha */}
         <div className="flex items-center justify-between text-xs text-neutral-400">
@@ -148,25 +150,35 @@ export default function CocinaPage() {
             const produceQty = it.quantity - fromStock;
             const allStock = produceQty <= 0;
             return (
-              <li
-                key={it.id}
-                className={`flex items-baseline gap-2 leading-tight ${allStock ? 'opacity-50' : ''}`}
-              >
-                <span className="text-xl font-bold tabular-nums text-neutral-900">
-                  {allStock ? it.quantity : produceQty}×
-                </span>
-                <span className="text-base font-semibold text-neutral-900">
-                  {it.variant.product.name}
-                  <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
-                  {allStock && <span className="ml-1 text-xs font-medium text-emerald-600">✓ de stock</span>}
-                  {!allStock && fromStock > 0 && (
-                    <span className="ml-1 text-xs font-medium text-emerald-600">({fromStock} de stock)</span>
-                  )}
-                </span>
+              <li key={it.id} className={`leading-tight ${allStock ? 'opacity-50' : ''}`}>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold tabular-nums text-neutral-900">
+                    {allStock ? it.quantity : produceQty}×
+                  </span>
+                  <span className="text-base font-semibold text-neutral-900">
+                    {it.variant.product.name}
+                    <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
+                    {allStock && <span className="ml-1 text-xs font-medium text-emerald-600">✓ de stock</span>}
+                    {!allStock && fromStock > 0 && (
+                      <span className="ml-1 text-xs font-medium text-emerald-600">({fromStock} de stock)</span>
+                    )}
+                  </span>
+                </div>
+                {it.customText && (
+                  <p className="ml-8 mt-1 rounded bg-amber-50 px-2 py-1 text-sm font-semibold text-amber-800">
+                    💬 {it.customText}
+                  </p>
+                )}
               </li>
             );
           })}
         </ul>
+
+        {o.notes && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
+            📝 Observación: {o.notes}
+          </p>
+        )}
 
         {/* Cliente: secundario */}
         <p className="mt-2 text-xs text-neutral-400">{o.customer.name ?? o.customer.whatsappPhone}</p>
