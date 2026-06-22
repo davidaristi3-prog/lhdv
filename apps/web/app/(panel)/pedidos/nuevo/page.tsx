@@ -54,6 +54,8 @@ function NuevoPedidoInner() {
   const [deliveryCost, setDeliveryCost] = useState(0);
   const [notes, setNotes] = useState('');
   const [isCustom, setIsCustom] = useState(false);
+  const [generarCuenta, setGenerarCuenta] = useState(false);
+  const [taxId, setTaxId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<'draft' | 'cocina' | null>(null);
   const [pendingZoneName, setPendingZoneName] = useState<string | null>(null);
@@ -96,6 +98,7 @@ function NuevoPedidoInner() {
           `/customers/lookup?phone=${encodeURIComponent(o.customer.whatsappPhone)}`,
         );
         if (found?.addresses?.length) setAddresses(found.addresses);
+        if (found?.taxId) setTaxId(found.taxId);
       } catch (e) {
         setError((e as Error).message);
       }
@@ -141,6 +144,7 @@ function NuevoPedidoInner() {
       if (found) {
         setCustomerFound(true);
         setCustomerName((n) => n || found.name || '');
+        if (found.taxId) setTaxId((t) => t || found.taxId || '');
         const addrs = found.addresses ?? [];
         setAddresses(addrs);
         if (addrs.length > 0) {
@@ -216,6 +220,9 @@ function NuevoPedidoInner() {
     if (confirm && validItems.length === 0) {
       return setError('Para enviar a cocina agregá al menos un producto');
     }
+    if (generarCuenta && !taxId.trim()) {
+      return setError('Para la cuenta de cobro indicá el CC o NIT del cliente');
+    }
 
     const usingSaved = !isPickup && selectedAddressId !== '' && selectedAddressId !== NEW_ADDRESS;
     const deliveryFields = isPickup
@@ -240,6 +247,7 @@ function NuevoPedidoInner() {
       isCustom,
       confirm,
       freeReason,
+      taxId: generarCuenta ? taxId.trim() : undefined,
       deliveryType,
       deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
       notes: notes || undefined,
@@ -252,14 +260,24 @@ function NuevoPedidoInner() {
       })),
     };
     try {
+      let orderId: string;
       if (editId) {
         // Guardar los cambios del borrador; si se pidió, enviarlo a cocina.
         await api<Order>(`/orders/${editId}`, { method: 'PATCH', body: JSON.stringify(payload) });
         if (confirm) await api(`/orders/${editId}/confirm`, { method: 'POST' });
-        router.push(confirm ? '/cocina' : '/pedidos');
+        orderId = editId;
       } else {
         const order = await api<Order>('/orders', { method: 'POST', body: JSON.stringify(payload) });
-        router.push(confirm ? '/cocina' : `/pedidos/${order.id}`);
+        orderId = order.id;
+      }
+      // Si se pidió cuenta de cobro, se genera y se abre lista para imprimir.
+      if (generarCuenta) {
+        const invoice = await api<{ id: string }>(`/invoices/from-order/${orderId}`, { method: 'POST' });
+        router.push(`/cuentas-cobro/${invoice.id}`);
+      } else if (editId) {
+        router.push(confirm ? '/cocina' : '/pedidos');
+      } else {
+        router.push(confirm ? '/cocina' : `/pedidos/${orderId}`);
       }
     } catch (e) {
       setError((e as Error).message);
@@ -550,6 +568,35 @@ function NuevoPedidoInner() {
             rows={2}
           />
           {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {/* Cuenta de cobro: opcional, al final del pedido. */}
+          <label className="mb-3 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={generarCuenta}
+              onChange={(e) => setGenerarCuenta(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="font-medium text-neutral-700">🧾 Generar cuenta de cobro</span>
+          </label>
+          {generarCuenta && (
+            <div className="mb-3 rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200">
+              <label className="block text-sm">
+                <span className="mb-1 block text-neutral-600">
+                  CC o NIT del cliente <span className="text-red-500">*</span>
+                </span>
+                <input
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
+                  placeholder="Ej: 890.982.479-6"
+                  className={field}
+                />
+              </label>
+              <p className="mt-2 text-xs text-neutral-500">
+                Al crear el pedido se abre la cuenta de cobro lista para imprimir. La dirección y el
+                teléfono salen del pedido y del cliente.
+              </p>
+            </div>
+          )}
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-sm text-neutral-500">5 · Total</p>

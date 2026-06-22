@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatCop, nextStatuses, PRODUCTION_STATUSES } from '@lhdv/shared';
 import { api, API_ORIGIN } from '@/lib/api';
@@ -19,6 +19,7 @@ import type { Order } from '@/lib/types';
 
 export default function PedidoDetallePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { data: order, loading, error, reload } = useApi<Order>(`/orders/${params.id}`);
   const { user } = useAuth();
   const [reason, setReason] = useState('');
@@ -38,6 +39,19 @@ export default function PedidoDetallePage() {
     } catch (e) {
       setActionError((e as Error).message);
     } finally {
+      setBusy(false);
+    }
+  }
+
+  // Genera (o reabre) la cuenta de cobro de este pedido y la muestra lista para imprimir.
+  async function generarCuenta() {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const invoice = await api<{ id: string }>(`/invoices/from-order/${params.id}`, { method: 'POST' });
+      router.push(`/cuentas-cobro/${invoice.id}`);
+    } catch (e) {
+      setActionError((e as Error).message);
       setBusy(false);
     }
   }
@@ -71,6 +85,14 @@ export default function PedidoDetallePage() {
             </span>
           )}
         </div>
+        <button
+          onClick={generarCuenta}
+          disabled={busy}
+          className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+          title="Generar o ver la cuenta de cobro de este pedido"
+        >
+          🧾 Cuenta de cobro
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 text-sm">

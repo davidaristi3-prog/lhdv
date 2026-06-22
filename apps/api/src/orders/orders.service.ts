@@ -82,6 +82,11 @@ export class OrdersService {
     }
     const customerId = await this.resolveCustomer(dto);
 
+    // Si viene CC/NIT (para cuenta de cobro), lo guardamos en la ficha del cliente.
+    if (dto.taxId) {
+      await this.prisma.customer.update({ where: { id: customerId }, data: { taxId: dto.taxId } });
+    }
+
     // Cargar variantes y adiciones para fijar precios (snapshots).
     const { itemsData, subtotal } = await this.buildOrderItems(items);
 

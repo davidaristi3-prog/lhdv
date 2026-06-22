@@ -21,6 +21,7 @@ import { RoutesModule } from './routes/routes.module';
 import { CouriersModule } from './couriers/couriers.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { FinishedStockModule } from './finished-stock/finished-stock.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { FinishedStockModule } from './finished-stock/finished-stock.module';
     CouriersModule,
     MaintenanceModule,
     FinishedStockModule,
+    InvoicesModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -14,4 +14,12 @@ export class UpdateCustomerDto {
   @Min(0)
   @Max(100)
   discountPercent?: number; // % de descuento del cliente (mayorista)
+
+  @IsOptional()
+  @IsString()
+  taxId?: string; // CC o NIT (para cuenta de cobro)
+
+  @IsOptional()
+  @IsString()
+  whatsappPhone?: string; // permitir corregir el celular
 }

@@ -42,11 +42,8 @@ export default function ClienteDetallePage() {
     await reload();
   }
 
-  async function setDiscount(v: string) {
-    await api(`/customers/${params.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ discountPercent: Number(v) || 0 }),
-    });
+  async function save(patch: Record<string, unknown>) {
+    await api(`/customers/${params.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
     await reload();
   }
 
@@ -66,21 +63,59 @@ export default function ClienteDetallePage() {
       </div>
 
       <div className="rounded-xl bg-white p-5 text-sm ring-1 ring-neutral-200">
-        <p className="text-neutral-500">WhatsApp</p>
-        <p className="font-medium">{customer.whatsappPhone}</p>
-        {customer.notes && <p className="mt-2 text-neutral-500">Nota: {customer.notes}</p>}
-        <div className="mt-3 flex items-center gap-2">
-          <span className="text-neutral-500">Descuento mayorista:</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            defaultValue={customer.discountPercent ?? ''}
-            onBlur={(e) => setDiscount(e.target.value)}
-            className="w-16 rounded-lg border border-neutral-300 px-2 py-1 text-sm"
-          />
-          <span className="text-neutral-500">%</span>
+        <h2 className="mb-3 text-sm font-semibold text-neutral-700">Datos del cliente</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label>
+            <span className="mb-1 block text-neutral-500">Nombre</span>
+            <input
+              key={`name-${customer.name ?? ''}`}
+              defaultValue={customer.name ?? ''}
+              onBlur={(e) => save({ name: e.target.value })}
+              className={`w-full ${field}`}
+            />
+          </label>
+          <label>
+            <span className="mb-1 block text-neutral-500">Celular / WhatsApp</span>
+            <input
+              key={`phone-${customer.whatsappPhone}`}
+              defaultValue={customer.whatsappPhone}
+              onBlur={(e) => save({ whatsappPhone: e.target.value })}
+              className={`w-full ${field}`}
+            />
+          </label>
+          <label>
+            <span className="mb-1 block text-neutral-500">
+              CC o NIT <span className="text-neutral-400">(para cuenta de cobro)</span>
+            </span>
+            <input
+              key={`tax-${customer.taxId ?? ''}`}
+              defaultValue={customer.taxId ?? ''}
+              onBlur={(e) => save({ taxId: e.target.value })}
+              className={`w-full ${field}`}
+            />
+          </label>
+          <label>
+            <span className="mb-1 block text-neutral-500">Descuento mayorista %</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              defaultValue={customer.discountPercent ?? ''}
+              onBlur={(e) => save({ discountPercent: Number(e.target.value) || 0 })}
+              className={`w-full ${field}`}
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="mb-1 block text-neutral-500">Nota</span>
+            <input
+              key={`notes-${customer.notes ?? ''}`}
+              defaultValue={customer.notes ?? ''}
+              onBlur={(e) => save({ notes: e.target.value })}
+              className={`w-full ${field}`}
+            />
+          </label>
         </div>
+        <p className="mt-2 text-xs text-neutral-400">Los cambios se guardan al salir de cada casilla.</p>
       </div>
 
       {/* Direcciones */}

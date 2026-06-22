@@ -126,4 +126,9 @@ export class CreateOrderDto {
   @IsOptional()
   @IsIn(['GIFT', 'WARRANTY'])
   freeReason?: 'GIFT' | 'WARRANTY';
+
+  /** CC o NIT del cliente: se guarda en su ficha (necesario para la cuenta de cobro). */
+  @IsOptional()
+  @IsString()
+  taxId?: string;
 }

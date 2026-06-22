@@ -122,6 +122,7 @@ export interface Customer {
   whatsappPhone: string;
   notes: string | null;
   discountPercent?: number | null;
+  taxId?: string | null;
   createdAt: string;
   _count?: { orders: number };
   orders?: Order[];

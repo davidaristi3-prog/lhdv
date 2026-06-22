@@ -102,6 +102,7 @@ model Customer {
   name          String?
   notes         String?
   discountPercent Int? // % de descuento del cliente (mayorista); null/0 = sin descuento
+  taxId         String? // CC o NIT del cliente (opcional; necesario para cuenta de cobro)
   consentAt     DateTime? // Habeas Data (Ley 1581): cuándo aceptó tratamiento de datos
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -550,4 +551,41 @@ model StockBatch {
 
   @@index([productVariantId])
   @@index([expiresAt])
+}
+
+// ─── Cuentas de cobro ─────────────────────────────────────────
+
+// Documento generado desde un pedido. Guarda snapshots del cliente y los renglones
+// para que la cuenta quede inmutable aunque el pedido o el cliente cambien después.
+model Invoice {
+  id              String   @id @default(cuid())
+  number          Int      @unique // consecutivo (configurable desde qué número arranca)
+  orderId         String?
+  customerName    String
+  customerTaxId   String?
+  customerAddress String?
+  customerPhone   String?
+  items           Json // [{ quantity, name, unitPriceCop, totalCop }]
+  subtotalCop     Int
+  deliveryCop     Int      @default(0)
+  totalCop        Int
+  issuedAt        DateTime @default(now())
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  @@index([number])
+}
+
+// Datos fijos de la empresa/vendedor y el próximo consecutivo (fila única, id="default").
+model InvoiceSettings {
+  id             String   @id @default("default")
+  companyName    String   @default("La Hora del Venado")
+  companyAddress String   @default("Carrera 25 #12 Sur 59 Local 101 Mall Complex los Balsos, Medellín, Colombia")
+  companyContact String   @default("(311) 7203872")
+  sellerName     String   @default("Camila Ortiz Echavarría")
+  sellerCC       String   @default("1017236585")
+  sellerRut      String   @default("96040900715-5")
+  paymentInfo    String   @default("Cuenta de Ahorros Bancolombia # 85000001519 Camila Ortiz Echavarria cc: 1017236585")
+  nextNumber     Int      @default(1802)
+  updatedAt      DateTime @updatedAt
 }
