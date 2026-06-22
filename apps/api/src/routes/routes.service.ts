@@ -41,9 +41,11 @@ export class RoutesService {
   ) {}
 
   private origin(): GeoResult {
+    // Planta La Hora del Venado (Cra. 25 #12 Sur 59, Los Balsos, Medellín). Punto de
+    // partida de las rutas; se puede sobreescribir con BAKERY_LAT/BAKERY_LNG del entorno.
     return {
-      lat: Number(this.config.get<string>('BAKERY_LAT') ?? 6.2442),
-      lng: Number(this.config.get<string>('BAKERY_LNG') ?? -75.5812),
+      lat: Number(this.config.get<string>('BAKERY_LAT') ?? 6.1862251),
+      lng: Number(this.config.get<string>('BAKERY_LNG') ?? -75.5622073),
     };
   }
 
@@ -51,31 +53,24 @@ export class RoutesService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /** Ordena las paradas por vecino-más-cercano desde el origen; las sin coordenadas van al final. */
-  private orderByNearest(origin: GeoResult, stops: { orderId: string; coords: GeoResult | null }[]) {
+  /**
+   * Ordena las paradas por distancia a la planta, de la más cercana a la más lejana.
+   * Para repostería (productos delicados): se sale entregando primero lo más cerca de
+   * la planta y se deja lo más lejano para el final. Las paradas sin coordenadas van al
+   * final (no se pueden medir).
+   */
+  private orderByDistanceToPlant(
+    origin: GeoResult,
+    stops: { orderId: string; coords: GeoResult | null }[],
+  ) {
     const withCoords = stops.filter(
       (s): s is { orderId: string; coords: GeoResult } => s.coords != null,
     );
     const withoutCoords = stops.filter((s) => s.coords == null);
 
-    const ordered: string[] = [];
-    let current = origin;
-    const remaining = [...withCoords];
-    while (remaining.length) {
-      let bestIdx = 0;
-      let bestD = Infinity;
-      for (let i = 0; i < remaining.length; i++) {
-        const d = haversineKm(current, remaining[i].coords);
-        if (d < bestD) {
-          bestD = d;
-          bestIdx = i;
-        }
-      }
-      const next = remaining.splice(bestIdx, 1)[0];
-      ordered.push(next.orderId);
-      current = next.coords;
-    }
-    return [...ordered, ...withoutCoords.map((s) => s.orderId)];
+    withCoords.sort((a, b) => haversineKm(origin, a.coords) - haversineKm(origin, b.coords));
+
+    return [...withCoords.map((s) => s.orderId), ...withoutCoords.map((s) => s.orderId)];
   }
 
   // ─── Lectura ────────────────────────────────────────────────
@@ -214,7 +209,7 @@ export class RoutesService {
       stops.push({ orderId: o.id, coords });
     }
 
-    const orderedIds = this.orderByNearest(this.origin(), stops);
+    const orderedIds = this.orderByDistanceToPlant(this.origin(), stops);
     const route = await this.prisma.deliveryRoute.create({
       data: { date: new Date(dto.date), courierId: dto.courierId ?? null },
     });
@@ -235,7 +230,7 @@ export class RoutesService {
           ? { lat: o.customerAddress.lat, lng: o.customerAddress.lng }
           : null,
     }));
-    const orderedIds = this.orderByNearest(this.origin(), stops);
+    const orderedIds = this.orderByDistanceToPlant(this.origin(), stops);
     let seq = 1;
     for (const orderId of orderedIds) {
       await this.prisma.order.update({ where: { id: orderId }, data: { routeSeq: seq++ } });
