@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { OrderStatus } from '@lhdv/shared';
-import { api } from '@/lib/api';
+import { api, API_BASE, getToken } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { STATUS_LABEL, formatDate } from '@/lib/labels';
@@ -50,7 +50,36 @@ export default function CocinaPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const stock = useApi<StockRow[]>('/finished-stock');
   const [reponiendo, setReponiendo] = useState<string | null>(null);
+  const [bajaFor, setBajaFor] = useState<Order | null>(null);
+  const [motivoBaja, setMotivoBaja] = useState('');
+  const [fotoBaja, setFotoBaja] = useState<File | null>(null);
   const faltantes = (stock.data ?? []).filter((r) => r.parStock > 0 && r.readyStock < r.parStock);
+
+  // Baja de producto con evidencia: motivo (obligatorio) + foto opcional.
+  async function darDeBaja() {
+    if (!bajaFor || !motivoBaja.trim()) return;
+    setBusyId(bajaFor.id);
+    try {
+      const fd = new FormData();
+      fd.append('reason', motivoBaja.trim());
+      if (fotoBaja) fd.append('photo', fotoBaja);
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/orders/${bajaFor.id}/scrap`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) throw new Error('No se pudo dar de baja');
+      setBajaFor(null);
+      setMotivoBaja('');
+      setFotoBaja(null);
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   // Producir para reponer el stock al objetivo: suma el faltante y descuenta insumos.
   async function reponer(r: StockRow) {
@@ -168,10 +197,14 @@ export default function CocinaPage() {
                   Devolver
                 </button>
                 <button
-                  onClick={() => move(o.id, 'CONFIRMED', true)}
+                  onClick={() => {
+                    setBajaFor(o);
+                    setMotivoBaja('');
+                    setFotoBaja(null);
+                  }}
                   disabled={busyId === o.id}
                   className="rounded-md border border-red-200 px-1.5 text-[10px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
-                  title="Dar de baja: producto no apto. Vuelve a Confirmado para rehacerlo; los insumos usados NO se reponen (merma)."
+                  title="Dar de baja: producto no apto. Pide motivo y evidencia; vuelve a Confirmado (merma)."
                 >
                   Baja
                 </button>
@@ -186,7 +219,7 @@ export default function CocinaPage() {
   return (
     <div>
       <div className="mb-5 flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Cocina · qué se produce hoy</h1>
+        <h1 className="text-lg font-semibold">Producción · qué se produce hoy</h1>
         {readOnly && (
           <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
             Solo consulta
@@ -276,6 +309,61 @@ export default function CocinaPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Baja de producto: motivo (obligatorio) + foto de evidencia. */}
+      {bajaFor && (
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setBajaFor(null)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-red-700">Dar de baja · {bajaFor.code}</h2>
+            <p className="mt-1 text-sm text-neutral-500">
+              Vuelve a Confirmado para rehacerlo; los insumos usados no se reponen (merma).
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">¿Qué pasó? *</label>
+                <textarea
+                  value={motivoBaja}
+                  onChange={(e) => setMotivoBaja(e.target.value)}
+                  rows={2}
+                  placeholder="Se quemó, mal horneado…"
+                  autoFocus
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Foto de evidencia (opcional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setFotoBaja(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setBajaFor(null)}
+                className="flex-1 rounded-lg border border-neutral-300 py-2 text-sm font-medium hover:bg-neutral-100"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={darDeBaja}
+                disabled={!motivoBaja.trim() || busyId === bajaFor.id}
+                className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40"
+              >
+                {busyId === bajaFor.id ? 'Guardando…' : 'Dar de baja'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -16,6 +16,7 @@ const routeInclude = {
     include: {
       customer: { select: { id: true, name: true, whatsappPhone: true } },
       customerAddress: true,
+      items: { include: { variant: { include: { product: true } } } },
     },
   },
 };
@@ -241,6 +242,9 @@ export class RoutesService {
 
   async start(id: string, userId: string, role: UserRole) {
     const route = await this.get(id);
+    if (route.orders.length === 0) {
+      throw new BadRequestException('No se puede iniciar una ruta sin pedidos');
+    }
     // Una ruta en curso a la vez: si el domiciliario ya tiene otra IN_PROGRESS, debe terminarla primero.
     if (route.courierId) {
       const otra = await this.prisma.deliveryRoute.findFirst({
@@ -438,12 +442,24 @@ export class RoutesService {
 
   /** Si en la ruta ya no quedan pedidos pendientes (entregados o devueltos), la cierra. */
   private async closeRouteIfDone(routeId: string) {
-    const total = await this.prisma.order.count({ where: { routeId } });
+    // Cierra la ruta cuando no le quedan pedidos pendientes (entregados o devueltos),
+    // aunque haya quedado vacía — así no se queda "en curso" atascada y bloqueando.
     const pending = await this.prisma.order.count({
       where: { routeId, status: { notIn: ['DELIVERED', 'CANCELLED'] } },
     });
-    if (total > 0 && pending === 0) {
+    if (pending === 0) {
       await this.prisma.deliveryRoute.update({ where: { id: routeId }, data: { status: 'DONE' } });
     }
+  }
+
+  /** Termina una ruta a la fuerza: los pedidos pendientes vuelven a "disponibles" (READY). */
+  async finishRoute(id: string) {
+    const route = await this.prisma.deliveryRoute.findUnique({ where: { id }, select: { id: true } });
+    if (!route) throw new NotFoundException('Ruta no encontrada');
+    await this.prisma.order.updateMany({
+      where: { routeId: id, status: { notIn: ['DELIVERED', 'CANCELLED'] } },
+      data: { routeId: null, routeSeq: null, status: 'READY' },
+    });
+    return this.prisma.deliveryRoute.update({ where: { id }, data: { status: 'DONE' } });
   }
 }

@@ -184,6 +184,7 @@ model Order {
   status          OrderStatus   @default(DRAFT)
   isCustom        Boolean       @default(false) // estándar (bot) vs personalizado (humano)
   isStockProduction Boolean     @default(false) // pedido interno para reponer stock de producto terminado
+  freeReason        String? // 'GIFT' | 'WARRANTY': pedido sin cobro (mueve inventario, no genera ingreso)
   deliveryType      DeliveryType?
   deliveryDate      DateTime?
   deliveryAddress   String? // snapshot de la dirección al momento del pedido
@@ -255,6 +256,7 @@ model OrderStatusEvent {
   toStatus   OrderStatus
   byUserId   String? // null = sistema (bot, webhook de pago)
   reason     String?
+  photoPath  String? // evidencia opcional del evento (p.ej. foto de la baja)
   createdAt  DateTime     @default(now())
 
   order  Order @relation(fields: [orderId], references: [id], onDelete: Cascade)

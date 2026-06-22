@@ -170,6 +170,16 @@ export default function MiRutaPage() {
                   <p className="font-medium">{o.customer.name ?? phone}</p>
                   <p className="text-sm text-neutral-500">{addr}</p>
                   {o.deliveryZone && <p className="text-xs text-neutral-400">{o.deliveryZone}</p>}
+                  {o.items && o.items.length > 0 && (
+                    <ul className="mt-1.5 space-y-0.5 rounded-lg bg-neutral-50 p-2 text-xs text-neutral-700">
+                      {o.items.map((it) => (
+                        <li key={it.id}>
+                          <span className="font-medium">{it.quantity}×</span> {it.variant.product.name} ·{' '}
+                          {it.variant.name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 {done && <span className="text-xs font-medium text-emerald-600">Entregado</span>}
               </div>

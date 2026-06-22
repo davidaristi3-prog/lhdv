@@ -80,6 +80,7 @@ export interface StatusEvent {
   fromStatus: OrderStatus | null;
   toStatus: OrderStatus;
   reason: string | null;
+  photoPath?: string | null;
   createdAt: string;
 }
 
@@ -90,6 +91,7 @@ export interface Order {
   channel: Channel;
   isCustom: boolean;
   isStockProduction?: boolean; // pedido interno de producción para reponer stock
+  freeReason?: string | null; // 'GIFT' | 'WARRANTY' si el pedido es sin cobro
   deliveryType: DeliveryType | null;
   deliveryDate: string | null;
   deliveryAddress: string | null;

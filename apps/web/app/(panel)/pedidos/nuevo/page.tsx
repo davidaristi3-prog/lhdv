@@ -208,7 +208,7 @@ function NuevoPedidoInner() {
     );
   }
 
-  async function submit(confirm: boolean) {
+  async function submit(confirm: boolean, freeReason?: 'GIFT' | 'WARRANTY') {
     setError(null);
     if (!customerPhone) return setError('Indicá el WhatsApp del cliente');
     // Solo cuentan los renglones con producto y tamaño; un borrador puede ir sin productos.
@@ -239,6 +239,7 @@ function NuevoPedidoInner() {
       channel: 'MANUAL',
       isCustom,
       confirm,
+      freeReason,
       deliveryType,
       deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
       notes: notes || undefined,
@@ -554,21 +555,41 @@ function NuevoPedidoInner() {
               <p className="text-sm text-neutral-500">5 · Total</p>
               <p className="text-2xl font-semibold">{formatCop(total)}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => submit(false)}
-                disabled={submitting !== null}
-                className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
-              >
-                {submitting === 'draft' ? 'Guardando…' : editId ? 'Guardar cambios' : 'Guardar borrador'}
-              </button>
-              <button
-                onClick={() => submit(true)}
-                disabled={submitting !== null}
-                className="rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-              >
-                {submitting === 'cocina' ? 'Enviando…' : editId ? 'Enviar a cocina' : 'Crear y enviar a cocina'}
-              </button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => submit(false)}
+                  disabled={submitting !== null}
+                  className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                >
+                  {submitting === 'draft' ? 'Guardando…' : editId ? 'Guardar cambios' : 'Guardar borrador'}
+                </button>
+                <button
+                  onClick={() => submit(true)}
+                  disabled={submitting !== null}
+                  className="rounded-lg bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {submitting === 'cocina' ? 'Enviando…' : editId ? 'Enviar a cocina' : 'Crear y enviar a cocina'}
+                </button>
+              </div>
+              {/* Sin cobro: mueve inventario igual, pero total $0 y no cuenta como ingreso. */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-neutral-400">Sin cobro:</span>
+                <button
+                  onClick={() => submit(true, 'GIFT')}
+                  disabled={submitting !== null}
+                  className="rounded-lg border border-purple-200 px-3 py-1.5 font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                >
+                  🎁 Regalo
+                </button>
+                <button
+                  onClick={() => submit(true, 'WARRANTY')}
+                  disabled={submitting !== null}
+                  className="rounded-lg border border-purple-200 px-3 py-1.5 font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                >
+                  🛠 Garantía
+                </button>
+              </div>
             </div>
           </div>
         </div>

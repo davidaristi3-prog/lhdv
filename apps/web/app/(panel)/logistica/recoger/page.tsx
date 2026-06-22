@@ -25,6 +25,20 @@ export default function RecogerLocalPage() {
 
   // Entregar deja evidencia de quién recibió (obligatorio) y una observación opcional,
   // guardadas en el motivo del evento del pedido.
+  // Pedido que nunca se recogió: vuelve al stock para venderlo a otro cliente.
+  async function noRecogido(o: Order) {
+    if (!confirm(`¿Devolver "${o.code}" al stock? El producto vuelve a Productos listos para vender a otro.`)) return;
+    setBusyId(o.id);
+    try {
+      await api(`/routes/orders/${o.id}/return`, { method: 'POST', body: JSON.stringify({ mode: 'stock' }) });
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function confirmar() {
     if (!entregar || !nombre.trim()) return;
     setBusyId(entregar.id);
@@ -80,13 +94,22 @@ export default function RecogerLocalPage() {
               </ul>
               <p className="mt-1 text-xs text-neutral-400">Para {formatDate(o.deliveryDate)}</p>
             </div>
-            <button
-              onClick={() => abrir(o)}
-              disabled={busyId === o.id}
-              className="shrink-0 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              Entregar
-            </button>
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <button
+                onClick={() => abrir(o)}
+                disabled={busyId === o.id}
+                className="rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Entregar
+              </button>
+              <button
+                onClick={() => noRecogido(o)}
+                disabled={busyId === o.id}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                No se recogió
+              </button>
+            </div>
           </div>
         ))}
       </div>

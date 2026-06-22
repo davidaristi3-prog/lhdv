@@ -22,6 +22,8 @@ interface TransitionOptions {
   actingRole?: UserRole;
   /** Al volver de producción a confirmado: true = baja (merma, no repone inventario). */
   scrap?: boolean;
+  /** Evidencia opcional del evento (p.ej. foto de la baja). */
+  photoPath?: string;
 }
 
 /** Estados que ve el tablero de cocina: solo producción (la entrega se maneja aparte). */
@@ -82,7 +84,8 @@ export class OrdersService {
     // Cargar variantes y adiciones para fijar precios (snapshots).
     const { itemsData, subtotal } = await this.buildOrderItems(items);
 
-    const deliveryCostCop = dto.deliveryCostCop ?? 0;
+    const isFree = dto.freeReason != null; // regalo/garantía: mueve inventario, no cobra
+    const deliveryCostCop = isFree ? 0 : (dto.deliveryCostCop ?? 0);
     const delivery = await this.resolveAddress(customerId, dto);
 
     // Siempre se crea como borrador (sin número). Si hay que enviarlo a cocina, se hace
@@ -94,13 +97,14 @@ export class OrdersService {
         channel: dto.channel,
         status: 'DRAFT',
         isCustom: dto.isCustom ?? false,
+        freeReason: dto.freeReason ?? null,
         deliveryType: dto.deliveryType,
         deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
         deliveryAddress: delivery.deliveryAddress,
         deliveryZone: delivery.deliveryZone,
         deliveryCostCop,
         subtotalCop: subtotal,
-        totalCop: subtotal + deliveryCostCop,
+        totalCop: isFree ? 0 : subtotal + deliveryCostCop,
         notes: dto.notes,
         customer: { connect: { id: customerId } },
         createdBy: { connect: { id: userId } },
@@ -245,6 +249,7 @@ export class OrdersService {
           toStatus: to,
           byUserId: opts.byUserId ?? null,
           reason: opts.reason ?? null,
+          photoPath: opts.photoPath ?? null,
         },
       });
 

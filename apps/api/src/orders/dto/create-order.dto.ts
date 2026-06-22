@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -120,4 +121,9 @@ export class CreateOrderDto {
   @IsOptional()
   @IsBoolean()
   confirm?: boolean;
+
+  /** Si se setea, el pedido es sin cobro (regalo/garantía): total = 0, no genera ingreso. */
+  @IsOptional()
+  @IsIn(['GIFT', 'WARRANTY'])
+  freeReason?: 'GIFT' | 'WARRANTY';
 }

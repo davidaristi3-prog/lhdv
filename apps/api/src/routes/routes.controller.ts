@@ -65,6 +65,12 @@ export class RoutesController {
   }
 
   @Roles(UserRole.OWNER)
+  @Post(':id/finish')
+  finish(@Param('id') id: string) {
+    return this.routes.finishRoute(id);
+  }
+
+  @Roles(UserRole.OWNER)
   @Post(':id/add')
   addToRoute(@Param('id') id: string, @Body() dto: AddOrdersDto) {
     return this.routes.addToRoute(id, dto.orderIds);

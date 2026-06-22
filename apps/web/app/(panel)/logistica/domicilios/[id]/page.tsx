@@ -125,7 +125,19 @@ export default function RutaDetallePage() {
             </>
           )}
           {route.status === 'IN_PROGRESS' && (
-            <span className="rounded-lg bg-teal-100 px-3 py-1.5 text-sm font-medium text-teal-800">En ruta</span>
+            <>
+              <span className="rounded-lg bg-teal-100 px-3 py-1.5 text-sm font-medium text-teal-800">En ruta</span>
+              <button
+                onClick={() => {
+                  if (confirm('¿Terminar esta ruta? Los pedidos sin entregar vuelven a disponibles para re-enrutar.'))
+                    action(`/routes/${route.id}/finish`);
+                }}
+                disabled={busy}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-100 disabled:opacity-50"
+              >
+                Terminar ruta
+              </button>
+            </>
           )}
           {route.status === 'DONE' && (
             <span className="rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-medium text-emerald-800">

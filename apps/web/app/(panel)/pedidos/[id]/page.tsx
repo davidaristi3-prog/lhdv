@@ -65,6 +65,11 @@ export default function PedidoDetallePage() {
               Personalizado
             </span>
           )}
+          {order.freeReason && (
+            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">
+              {order.freeReason === 'GIFT' ? '🎁 Regalo' : '🛠 Garantía'} · sin cobro
+            </span>
+          )}
         </div>
       </div>
 
@@ -193,6 +198,16 @@ export default function PedidoDetallePage() {
                 {e.fromStatus ? `${STATUS_LABEL[e.fromStatus]} → ` : ''}
                 <span className="font-medium">{STATUS_LABEL[e.toStatus]}</span>
                 {e.reason && <span className="text-neutral-400"> · {e.reason}</span>}
+                {e.photoPath && (
+                  <a
+                    href={`${API_ORIGIN}${e.photoPath}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-1 text-blue-700 hover:underline"
+                  >
+                    📷 foto
+                  </a>
+                )}
               </span>
               <span className="text-xs text-neutral-400">{formatDateTime(e.createdAt)}</span>
             </li>

@@ -1,4 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'node:path';
 import { OrderStatus, UserRole } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -6,6 +20,7 @@ import { TransitionOrderDto } from './dto/transition-order.dto';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload } from '../auth/jwt-payload.interface';
+import { UPLOADS_DIR } from '../common/uploads';
 
 // El domiciliario (DELIVERY) no accede a los pedidos del negocio: trabaja con /routes
 // (Mi ruta) y /couriers (Mi cuenta). Los métodos de escritura restringen más (OWNER/SALES).
@@ -61,6 +76,34 @@ export class OrdersController {
       reason: dto.reason,
       actingRole: user.role,
       scrap: dto.scrap,
+    });
+  }
+
+  /** Dar de baja un producto en producción con evidencia (motivo + foto opcional).
+   *  Vuelve a CONFIRMED como merma (no repone insumos). */
+  @Post(':id/scrap')
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: diskStorage({
+        destination: UPLOADS_DIR,
+        filename: (_req, file, cb) =>
+          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname) || '.jpg'}`),
+      }),
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  scrap(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('reason') reason: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.orders.applyTransition(id, 'CONFIRMED', {
+      byUserId: user.sub,
+      actingRole: user.role,
+      scrap: true,
+      reason: reason || 'Baja de producto',
+      photoPath: file ? `/uploads/${file.filename}` : undefined,
     });
   }
 
