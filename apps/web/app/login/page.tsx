@@ -17,8 +17,9 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await login(email, password);
-      router.replace('/pedidos');
+      const u = await login(email, password);
+      // El domiciliario no tiene acceso a Pedidos: va directo a su ruta.
+      router.replace(u.role === 'DELIVERY' ? '/mi-ruta' : '/pedidos');
     } catch (err) {
       setError((err as Error).message);
     } finally {

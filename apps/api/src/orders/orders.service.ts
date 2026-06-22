@@ -38,6 +38,7 @@ export class OrdersService {
       where: {
         status: params.status,
         deliveryDate: params.date ? this.dayRange(params.date) : undefined,
+        isStockProduction: false, // los pedidos de producción para stock solo se ven en Cocina
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -253,10 +254,15 @@ export class OrdersService {
       // createMany de movimientos— para no agotar el tiempo de la transacción
       // interactiva contra Postgres remoto (Neon).
       if (to === 'IN_PRODUCTION' && order.inventoryDeductedAt == null) {
-        const orderItems = await tx.orderItem.findMany({
-          where: { orderId, fromStock: false }, // los cubiertos desde stock no se producen
-          select: { quantity: true, productVariantId: true },
-        });
+        const orderItems = (
+          await tx.orderItem.findMany({
+            where: { orderId },
+            select: { quantity: true, fromStockQty: true, productVariantId: true },
+          })
+        )
+          // Solo se produce lo que el stock terminado no cubrió.
+          .map((it) => ({ productVariantId: it.productVariantId, produceQty: it.quantity - it.fromStockQty }))
+          .filter((it) => it.produceQty > 0);
         const variantIds = [...new Set(orderItems.map((it) => it.productVariantId))];
         const recipeItems = await tx.recipeItem.findMany({
           where: { productVariantId: { in: variantIds } },
@@ -271,7 +277,7 @@ export class OrdersService {
         const consume = new Map<string, number>();
         for (const it of orderItems) {
           for (const r of recipeByVariant.get(it.productVariantId) ?? []) {
-            consume.set(r.ingredientId, (consume.get(r.ingredientId) ?? 0) + r.quantity * it.quantity);
+            consume.set(r.ingredientId, (consume.get(r.ingredientId) ?? 0) + r.quantity * it.produceQty);
           }
         }
         if (consume.size > 0) {
@@ -346,6 +352,43 @@ export class OrdersService {
             },
           });
         }
+      }
+
+      // Pedido de producción para stock: al quedar listo, suma sus unidades al stock
+      // terminado y se cierra (no va a entrega; ya cumplió su propósito de reponer).
+      if (to === 'READY' && order.isStockProduction) {
+        const prodItems = await tx.orderItem.findMany({
+          where: { orderId },
+          select: { quantity: true, productVariantId: true },
+        });
+        for (const it of prodItems) {
+          await tx.productVariant.update({
+            where: { id: it.productVariantId },
+            data: { readyStock: { increment: it.quantity } },
+          });
+          await tx.finishedStockMovement.create({
+            data: {
+              productVariantId: it.productVariantId,
+              type: 'PRODUCTION',
+              quantity: it.quantity,
+              orderId,
+              reason: 'Producción para stock terminada',
+            },
+          });
+        }
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: 'DELIVERED', deliveredAt: new Date() },
+        });
+        await tx.orderStatusEvent.create({
+          data: {
+            orderId,
+            fromStatus: 'READY',
+            toStatus: 'DELIVERED',
+            byUserId: opts.byUserId ?? null,
+            reason: 'Stock repuesto',
+          },
+        });
       }
 
       return updated;
@@ -433,40 +476,33 @@ export class OrdersService {
     });
     const available = new Map(variants.map((v) => [v.id, v.readyStock]));
     const used = new Map<string, number>();
-    const fromStockItemIds: string[] = [];
 
     let allFromStock = true;
     for (const it of items) {
       const avail = available.get(it.productVariantId) ?? 0;
-      if (avail >= it.quantity) {
-        available.set(it.productVariantId, avail - it.quantity);
-        used.set(it.productVariantId, (used.get(it.productVariantId) ?? 0) + it.quantity);
-        fromStockItemIds.push(it.id);
-      } else {
-        allFromStock = false;
+      const take = Math.min(avail, it.quantity); // toma lo que haya, hasta la cantidad del renglón
+      if (take > 0) {
+        available.set(it.productVariantId, avail - take);
+        used.set(it.productVariantId, (used.get(it.productVariantId) ?? 0) + take);
+        await tx.orderItem.update({ where: { id: it.id }, data: { fromStockQty: take } });
       }
+      if (take < it.quantity) allFromStock = false; // queda algo por producir
     }
 
-    if (fromStockItemIds.length > 0) {
-      await tx.orderItem.updateMany({
-        where: { id: { in: fromStockItemIds } },
-        data: { fromStock: true },
+    for (const [variantId, qty] of used) {
+      await tx.productVariant.update({
+        where: { id: variantId },
+        data: { readyStock: { decrement: qty } },
       });
-      for (const [variantId, qty] of used) {
-        await tx.productVariant.update({
-          where: { id: variantId },
-          data: { readyStock: { decrement: qty } },
-        });
-        await tx.finishedStockMovement.create({
-          data: {
-            productVariantId: variantId,
-            type: 'SALE',
-            quantity: qty,
-            orderId,
-            reason: 'Cubierto desde stock al enviar a cocina',
-          },
-        });
-      }
+      await tx.finishedStockMovement.create({
+        data: {
+          productVariantId: variantId,
+          type: 'SALE',
+          quantity: qty,
+          orderId,
+          reason: 'Cubierto desde stock al enviar a cocina',
+        },
+      });
     }
 
     return allFromStock;

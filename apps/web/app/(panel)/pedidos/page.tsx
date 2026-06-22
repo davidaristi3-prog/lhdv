@@ -30,6 +30,7 @@ const TABS: { key: Tab; label: string }[] = [
 export default function PedidosPage() {
   const { user } = useAuth();
   const canCreate = user?.role === 'OWNER' || user?.role === 'SALES';
+  const canSeeStock = user?.role === 'OWNER' || user?.role === 'KITCHEN';
   const { data: orders, loading, error, reload } = useApi<Order[]>('/orders');
   const [tab, setTab] = useState<Tab>('activos');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -87,14 +88,24 @@ export default function PedidosPage() {
     <div>
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-lg font-semibold">Pedidos</h1>
-        {canCreate && (
-          <Link
-            href="/pedidos/nuevo"
-            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            + Nuevo pedido
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {canSeeStock && (
+            <Link
+              href="/productos-listos"
+              className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+            >
+              📦 Productos listos
+            </Link>
+          )}
+          {canCreate && (
+            <Link
+              href="/pedidos/nuevo"
+              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              + Nuevo pedido
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Pestañas: Activos (lo que importa) · Borradores (a la mano) · Entregados (archivo) */}

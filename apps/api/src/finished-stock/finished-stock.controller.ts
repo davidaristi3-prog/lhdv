@@ -6,7 +6,7 @@ import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload } from '../auth/jwt-payload.interface';
 
-@Roles(UserRole.OWNER)
+@Roles(UserRole.OWNER, UserRole.KITCHEN)
 @Controller('finished-stock')
 export class FinishedStockController {
   constructor(private readonly stock: FinishedStockService) {}
@@ -33,6 +33,16 @@ export class FinishedStockController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.stock.produce(variantId, dto.quantity, dto.notes, user.sub);
+  }
+
+  /** Crea un pedido de producción para reponer stock (entra a cocina como un pedido más). */
+  @Post(':variantId/produce-order')
+  produceOrder(
+    @Param('variantId') variantId: string,
+    @Body() dto: ProduceStockDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.stock.createProductionOrder(variantId, dto.quantity, user.sub);
   }
 
   @Post(':variantId/adjust')

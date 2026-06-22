@@ -14,7 +14,7 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
 }
 
@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('lhdv_token', data.accessToken);
     localStorage.setItem('lhdv_user', JSON.stringify(data.user));
     setUser(data.user);
+    return data.user;
   }, []);
 
   const logout = useCallback(() => {

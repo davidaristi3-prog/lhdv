@@ -11,17 +11,30 @@ import type { Order } from '@/lib/types';
 export default function RecogerLocalPage() {
   const { data: orders, loading, error, reload } = useApi<Order[]>('/orders/board');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [entregar, setEntregar] = useState<Order | null>(null);
+  const [nombre, setNombre] = useState('');
+  const [obs, setObs] = useState('');
 
   const pendientes = (orders ?? []).filter((o) => o.status === 'READY' && o.deliveryType === 'PICKUP');
 
-  // Igual que el botón de Pedidos: al recogerlo queda entregado.
-  async function marcarRecogido(id: string) {
-    setBusyId(id);
+  function abrir(o: Order) {
+    setEntregar(o);
+    setNombre('');
+    setObs('');
+  }
+
+  // Entregar deja evidencia de quién recibió (obligatorio) y una observación opcional,
+  // guardadas en el motivo del evento del pedido.
+  async function confirmar() {
+    if (!entregar || !nombre.trim()) return;
+    setBusyId(entregar.id);
     try {
-      await api(`/orders/${id}/transition`, {
+      const reason = `Recogido por ${nombre.trim()}${obs.trim() ? ` · ${obs.trim()}` : ''}`;
+      await api(`/orders/${entregar.id}/transition`, {
         method: 'PATCH',
-        body: JSON.stringify({ to: 'DELIVERED', reason: 'Recogido en el local' }),
+        body: JSON.stringify({ to: 'DELIVERED', reason }),
       });
+      setEntregar(null);
       await reload();
     } catch (e) {
       alert((e as Error).message);
@@ -33,7 +46,7 @@ export default function RecogerLocalPage() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-neutral-500">
-        Pedidos listos para que el cliente los recoja en el local. Marcá “Recogido” cuando se los lleven.
+        Pedidos listos para que el cliente los recoja en el local. Tocá “Entregar” cuando se lo lleven.
       </p>
 
       {loading && <p className="text-neutral-500">Cargando…</p>}
@@ -68,15 +81,66 @@ export default function RecogerLocalPage() {
               <p className="mt-1 text-xs text-neutral-400">Para {formatDate(o.deliveryDate)}</p>
             </div>
             <button
-              onClick={() => marcarRecogido(o.id)}
+              onClick={() => abrir(o)}
               disabled={busyId === o.id}
               className="shrink-0 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              {busyId === o.id ? '…' : '✓ Recogido'}
+              Entregar
             </button>
           </div>
         ))}
       </div>
+
+      {/* Aviso de confirmación: evidencia de quién recibió + observación. */}
+      {entregar && (
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setEntregar(null)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold">Confirmar entrega · {entregar.code}</h2>
+            <p className="mt-1 text-sm text-neutral-500">
+              {entregar.customer.name ?? entregar.customer.whatsappPhone}
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">¿Quién lo recibió? *</label>
+                <input
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Nombre de quien recoge"
+                  autoFocus
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Observación (opcional)</label>
+                <input
+                  value={obs}
+                  onChange={(e) => setObs(e.target.value)}
+                  placeholder="Alguna nota…"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                />
+              </div>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setEntregar(null)}
+                className="flex-1 rounded-lg border border-neutral-300 py-2 text-sm font-medium hover:bg-neutral-100"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmar}
+                disabled={!nombre.trim() || busyId === entregar.id}
+                className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
+              >
+                {busyId === entregar.id ? 'Guardando…' : 'Confirmar entrega'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

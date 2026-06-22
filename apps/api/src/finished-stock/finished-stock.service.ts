@@ -119,4 +119,43 @@ export class FinishedStockService {
       include: { variant: { select: { name: true, product: { select: { name: true } } } } },
     });
   }
+
+  /** Cliente interno para los pedidos de producción de stock (no es un cliente real). */
+  private async plantCustomerId(): Promise<string> {
+    const phone = 'PLANTA-INTERNA';
+    const existing = await this.prisma.customer.findUnique({ where: { whatsappPhone: phone } });
+    if (existing) return existing.id;
+    const created = await this.prisma.customer.create({
+      data: { whatsappPhone: phone, name: '🏭 Producción (stock)' },
+    });
+    return created.id;
+  }
+
+  /**
+   * Crea un pedido de producción para reponer stock: entra a cocina como un pedido más
+   * (CONFIRMED), sin cliente real ni consecutivo. Al marcarlo Listo, sus unidades suman
+   * al stock terminado (lo maneja OrdersService.applyTransition).
+   */
+  async createProductionOrder(variantId: string, quantity: number, userId: string) {
+    const variant = await this.prisma.productVariant.findUnique({
+      where: { id: variantId },
+      select: { priceCop: true },
+    });
+    if (!variant) throw new NotFoundException('Presentación no encontrada');
+    const customerId = await this.plantCustomerId();
+    return this.prisma.order.create({
+      data: {
+        code: null,
+        channel: 'MANUAL',
+        status: 'CONFIRMED',
+        isStockProduction: true,
+        customer: { connect: { id: customerId } },
+        createdBy: { connect: { id: userId } },
+        subtotalCop: 0,
+        totalCop: 0,
+        items: { create: [{ quantity, unitPriceCop: variant.priceCop, productVariantId: variantId }] },
+        statusEvents: { create: { toStatus: 'CONFIRMED', byUserId: userId, reason: 'Producción para stock' } },
+      },
+    });
+  }
 }

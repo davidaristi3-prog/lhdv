@@ -78,7 +78,7 @@ export class RoutesService {
   /** Pedidos listos para domicilio que aún no están en una ruta. */
   availableOrders() {
     return this.prisma.order.findMany({
-      where: { routeId: null, deliveryType: { not: 'PICKUP' }, status: { in: ROUTABLE } },
+      where: { routeId: null, deliveryType: { not: 'PICKUP' }, status: { in: ROUTABLE }, isStockProduction: false },
       orderBy: { createdAt: 'asc' },
       include: {
         customer: { select: { id: true, name: true, whatsappPhone: true } },
@@ -101,7 +101,7 @@ export class RoutesService {
    */
   async suggestAssignments() {
     const orders = await this.prisma.order.findMany({
-      where: { routeId: null, deliveryType: { not: 'PICKUP' }, status: { in: ROUTABLE } },
+      where: { routeId: null, deliveryType: { not: 'PICKUP' }, status: { in: ROUTABLE }, isStockProduction: false },
       orderBy: [{ deliveryDate: 'asc' }, { createdAt: 'asc' }],
       include: {
         customer: { select: { id: true, name: true, whatsappPhone: true } },
@@ -392,7 +392,7 @@ export class RoutesService {
   ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { items: { select: { quantity: true, productVariantId: true, fromStock: true } } },
+      include: { items: { select: { quantity: true, productVariantId: true, fromStockQty: true } } },
     });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     const routeId = order.routeId;
@@ -403,16 +403,18 @@ export class RoutesService {
         actingRole: opts.role,
         reason: opts.notes ?? 'No entregado — devuelto al stock',
       });
-      for (const it of order.items.filter((i) => !i.fromStock)) {
+      for (const it of order.items) {
+        const producedQty = it.quantity - it.fromStockQty; // lo producido (no salió de stock)
+        if (producedQty <= 0) continue;
         await this.prisma.productVariant.update({
           where: { id: it.productVariantId },
-          data: { readyStock: { increment: it.quantity } },
+          data: { readyStock: { increment: producedQty } },
         });
         await this.prisma.finishedStockMovement.create({
           data: {
             productVariantId: it.productVariantId,
             type: 'RETURN',
-            quantity: it.quantity,
+            quantity: producedQty,
             orderId,
             reason: 'Devuelto de domicilio (no entregado)',
           },

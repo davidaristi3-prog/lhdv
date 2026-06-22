@@ -57,11 +57,13 @@ export default function CocinaPage() {
     const falta = r.parStock - r.readyStock;
     setReponiendo(r.id);
     try {
-      await api(`/finished-stock/${r.id}/produce`, {
+      // Crea un pedido de producción que entra a Cocina como un pedido más.
+      await api(`/finished-stock/${r.id}/produce-order`, {
         method: 'POST',
         body: JSON.stringify({ quantity: falta }),
       });
       await stock.reload();
+      await reload(); // el nuevo pedido de producción aparece en el tablero
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -94,9 +96,13 @@ export default function CocinaPage() {
       >
         {/* Encabezado secundario: código + fecha */}
         <div className="flex items-center justify-between text-xs text-neutral-400">
-          <Link href={`/pedidos/${o.id}`} className="font-medium text-blue-600 hover:underline">
-            {o.code}
-          </Link>
+          {o.isStockProduction ? (
+            <span className="font-semibold text-purple-700">🏭 Para stock</span>
+          ) : (
+            <Link href={`/pedidos/${o.id}`} className="font-medium text-blue-600 hover:underline">
+              {o.code}
+            </Link>
+          )}
           {later && days != null ? (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
               {formatDate(o.deliveryDate)} · en {days} días
@@ -106,23 +112,31 @@ export default function CocinaPage() {
           )}
         </div>
 
-        {/* Lo que se produce: protagonista. Lo cubierto desde stock va atenuado (no se hornea). */}
+        {/* Lo que se produce: protagonista. La cantidad cubierta por stock no se hornea. */}
         <ul className="mt-2 space-y-1.5">
-          {o.items.map((it) => (
-            <li
-              key={it.id}
-              className={`flex items-baseline gap-2 leading-tight ${it.fromStock ? 'opacity-50' : ''}`}
-            >
-              <span className="text-xl font-bold tabular-nums text-neutral-900">{it.quantity}×</span>
-              <span className="text-base font-semibold text-neutral-900">
-                {it.variant.product.name}
-                <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
-                {it.fromStock && (
-                  <span className="ml-1 text-xs font-medium text-emerald-600">✓ de stock</span>
-                )}
-              </span>
-            </li>
-          ))}
+          {o.items.map((it) => {
+            const fromStock = it.fromStockQty ?? 0;
+            const produceQty = it.quantity - fromStock;
+            const allStock = produceQty <= 0;
+            return (
+              <li
+                key={it.id}
+                className={`flex items-baseline gap-2 leading-tight ${allStock ? 'opacity-50' : ''}`}
+              >
+                <span className="text-xl font-bold tabular-nums text-neutral-900">
+                  {allStock ? it.quantity : produceQty}×
+                </span>
+                <span className="text-base font-semibold text-neutral-900">
+                  {it.variant.product.name}
+                  <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
+                  {allStock && <span className="ml-1 text-xs font-medium text-emerald-600">✓ de stock</span>}
+                  {!allStock && fromStock > 0 && (
+                    <span className="ml-1 text-xs font-medium text-emerald-600">({fromStock} de stock)</span>
+                  )}
+                </span>
+              </li>
+            );
+          })}
         </ul>
 
         {/* Cliente: secundario */}
@@ -178,6 +192,14 @@ export default function CocinaPage() {
             Solo consulta
           </span>
         )}
+        {!readOnly && (
+          <Link
+            href="/productos-listos"
+            className="ml-auto rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-100"
+          >
+            📦 Productos listos
+          </Link>
+        )}
       </div>
       {loading && <p className="text-neutral-500">Cargando…</p>}
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
@@ -190,7 +212,8 @@ export default function CocinaPage() {
             <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs">{faltantes.length}</span>
           </h2>
           <p className="mb-3 text-xs text-amber-700">
-            Productos por debajo del objetivo. Producilos y marcá “Hecho” para sumarlos al stock listo.
+            Productos por debajo del objetivo. Tocá “Producir” para crear un pedido que pasa por las
+            etapas de cocina; al marcarlo Listo se suma al stock.
           </p>
           <div className="flex flex-wrap gap-2">
             {faltantes.map((r) => {
@@ -213,7 +236,7 @@ export default function CocinaPage() {
                     disabled={reponiendo === r.id}
                     className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {reponiendo === r.id ? '…' : `Hecho +${falta}`}
+                    {reponiendo === r.id ? '…' : `Producir ${falta}`}
                   </button>
                 </div>
               );

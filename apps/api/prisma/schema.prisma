@@ -183,6 +183,7 @@ model Order {
   channel         OrderChannel
   status          OrderStatus   @default(DRAFT)
   isCustom        Boolean       @default(false) // estándar (bot) vs personalizado (humano)
+  isStockProduction Boolean     @default(false) // pedido interno para reponer stock de producto terminado
   deliveryType      DeliveryType?
   deliveryDate      DateTime?
   deliveryAddress   String? // snapshot de la dirección al momento del pedido
@@ -228,7 +229,7 @@ model OrderItem {
   unitPriceCop     Int // snapshot del precio al momento del pedido
   customText       String? // letras / diseño
   notes            String?
-  fromStock        Boolean @default(false) // se cubrió desde el stock terminado (no se produce ni descuenta insumos)
+  fromStockQty     Int     @default(0) // unidades del renglón cubiertas desde el stock terminado (el resto se produce)
 
   order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant   ProductVariant      @relation(fields: [productVariantId], references: [id])

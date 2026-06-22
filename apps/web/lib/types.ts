@@ -70,7 +70,7 @@ export interface OrderItem {
   unitPriceCop: number;
   customText: string | null;
   notes: string | null;
-  fromStock?: boolean; // se cubrió desde el stock de producto terminado (no se hornea)
+  fromStockQty?: number; // unidades del renglón cubiertas desde stock (el resto se hornea)
   variant: Variant & { product: Product };
   additions?: OrderItemAddition[];
 }
@@ -89,6 +89,7 @@ export interface Order {
   status: OrderStatus;
   channel: Channel;
   isCustom: boolean;
+  isStockProduction?: boolean; // pedido interno de producción para reponer stock
   deliveryType: DeliveryType | null;
   deliveryDate: string | null;
   deliveryAddress: string | null;
