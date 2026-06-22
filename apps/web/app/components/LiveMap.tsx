@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -23,12 +24,113 @@ interface Props {
   height?: number;
 }
 
+const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
 /**
- * Mapa de seguimiento en vivo con VARIOS domiciliarios a la vez. Cada ruta tiene su
- * color: sus paradas (numeradas; verdes cuando ya se entregaron) y la posición actual
- * del domiciliario (círculo con halo). Basado en DeliveryMap pero multi-ruta.
+ * Mapa de seguimiento con varios domiciliarios. Cada ruta tiene su color: sus paradas
+ * (verdes si ya se entregaron) y la posición actual del domiciliario (círculo con halo).
+ * Usa Google Maps cuando hay `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`; si no, cae a OpenStreetMap.
  */
-export function LiveMap({ routes, height = 440 }: Props) {
+export function LiveMap(props: Props) {
+  if (KEY) return <GoogleLiveMap {...props} />;
+  return <LeafletLiveMap {...props} />;
+}
+
+// ─── Google Maps ──────────────────────────────────────────────
+function GoogleLiveMap({ routes, height = 440 }: Props) {
+  const { isLoaded } = useJsApiLoader({ id: 'lhdv-gmap', googleMapsApiKey: KEY as string });
+
+  const onLoad = useCallback(
+    (map: google.maps.Map) => {
+      const b = new google.maps.LatLngBounds();
+      let any = false;
+      for (const r of routes) {
+        for (const s of r.stops) {
+          b.extend({ lat: s.lat, lng: s.lng });
+          any = true;
+        }
+        if (r.courier) {
+          b.extend(r.courier);
+          any = true;
+        }
+      }
+      if (any) map.fitBounds(b, 48);
+    },
+    [routes],
+  );
+
+  if (!isLoaded) {
+    return <div style={{ height }} className="w-full animate-pulse rounded-xl bg-neutral-100" />;
+  }
+
+  const offsetCenter = (w: number, h: number) => ({ x: -(w / 2), y: -(h / 2) });
+
+  return (
+    <GoogleMap
+      mapContainerStyle={{ width: '100%', height, borderRadius: '0.75rem' }}
+      center={{ lat: 6.2442, lng: -75.5812 }}
+      zoom={12}
+      onLoad={onLoad}
+      options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+    >
+      {routes.flatMap((r) =>
+        r.stops.map((s, i) => (
+          <OverlayView
+            key={`${r.id}-s${i}`}
+            position={{ lat: s.lat, lng: s.lng }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            getPixelPositionOffset={offsetCenter}
+          >
+            <div
+              title={`${r.courierName} — ${s.seq}. ${s.label}`}
+              style={{
+                background: s.done ? '#10b981' : r.color,
+                color: '#fff',
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                fontWeight: 600,
+                border: '2px solid #fff',
+                boxShadow: '0 1px 3px rgba(0,0,0,.4)',
+              }}
+            >
+              {s.seq}
+            </div>
+          </OverlayView>
+        )),
+      )}
+      {routes
+        .filter((r) => r.courier)
+        .map((r) => (
+          <OverlayView
+            key={`${r.id}-c`}
+            position={r.courier as { lat: number; lng: number }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            getPixelPositionOffset={offsetCenter}
+          >
+            <div
+              title={`🛵 ${r.courierName}`}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: '50%',
+                background: r.color,
+                border: '3px solid #fff',
+                boxShadow: `0 0 0 4px ${r.color}55, 0 1px 5px rgba(0,0,0,.6)`,
+              }}
+            />
+          </OverlayView>
+        ))}
+    </GoogleMap>
+  );
+}
+
+// ─── OpenStreetMap (respaldo, sin key) ────────────────────────
+function LeafletLiveMap({ routes, height = 440 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
