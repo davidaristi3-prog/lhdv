@@ -18,6 +18,23 @@ const FORWARD: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> 
   IN_PRODUCTION: { to: 'READY', label: 'Marcar listo' },
 };
 
+/** Días que faltan para la entrega: 0 = hoy, 1 = mañana, >1 = más adelante. null si no hay fecha. */
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(iso);
+  d.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - today.getTime()) / 86_400_000);
+}
+
+// "Para más adelante" = falta más de 1 día (pasado mañana en adelante). Sin fecha o
+// vencidos quedan arriba (hay que atenderlos pronto).
+const isLater = (o: Order) => {
+  const n = daysUntil(o.deliveryDate);
+  return n != null && n > 1;
+};
+
 export default function CocinaPage() {
   const { data: orders, loading, error, reload } = useApi<Order[]>('/orders/board');
   const { user } = useAuth();
@@ -39,6 +56,85 @@ export default function CocinaPage() {
     }
   }
 
+  function renderCard(o: Order, later: boolean) {
+    const step = FORWARD[o.status];
+    const days = daysUntil(o.deliveryDate);
+    return (
+      <div
+        key={o.id}
+        className={`rounded-lg bg-white p-3 shadow-sm ring-1 ring-neutral-200 ${later ? 'opacity-70' : ''}`}
+      >
+        {/* Encabezado secundario: código + fecha */}
+        <div className="flex items-center justify-between text-xs text-neutral-400">
+          <Link href={`/pedidos/${o.id}`} className="font-medium text-blue-600 hover:underline">
+            {o.code}
+          </Link>
+          {later && days != null ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
+              {formatDate(o.deliveryDate)} · en {days} días
+            </span>
+          ) : (
+            <span>{formatDate(o.deliveryDate)}</span>
+          )}
+        </div>
+
+        {/* Lo que se produce: protagonista de la tarjeta */}
+        <ul className="mt-2 space-y-1.5">
+          {o.items.map((it) => (
+            <li key={it.id} className="flex items-baseline gap-2 leading-tight">
+              <span className="text-xl font-bold tabular-nums text-neutral-900">{it.quantity}×</span>
+              <span className="text-base font-semibold text-neutral-900">
+                {it.variant.product.name}
+                <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+
+        {/* Cliente: secundario */}
+        <p className="mt-2 text-xs text-neutral-400">{o.customer.name ?? o.customer.whatsappPhone}</p>
+        {o.status === 'READY' && (
+          <p className="mt-2 text-xs font-medium text-neutral-500">
+            {o.deliveryType === 'PICKUP' ? '📦 Recoge en el local' : '🛵 Pasa a Domicilios'}
+          </p>
+        )}
+        {!readOnly && (step || o.status === 'IN_PRODUCTION') && (
+          <div className="mt-2 flex items-stretch gap-1.5">
+            {step && (
+              <button
+                onClick={() => move(o.id, step.to)}
+                disabled={busyId === o.id}
+                className="flex-1 rounded-md bg-neutral-900 px-2 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+              >
+                {step.label} →
+              </button>
+            )}
+            {o.status === 'IN_PRODUCTION' && (
+              <>
+                <button
+                  onClick={() => move(o.id, 'CONFIRMED')}
+                  disabled={busyId === o.id}
+                  className="rounded-md border border-neutral-300 px-2 text-xs font-medium text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
+                  title="Devolver a Confirmado: repone los insumos (si te equivocaste y no se horneó)"
+                >
+                  Devolver
+                </button>
+                <button
+                  onClick={() => move(o.id, 'CONFIRMED', true)}
+                  disabled={busyId === o.id}
+                  className="rounded-md border border-red-200 px-1.5 text-[10px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
+                  title="Dar de baja: producto no apto. Vuelve a Confirmado para rehacerlo; los insumos usados NO se reponen (merma)."
+                >
+                  Baja
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-5 flex items-center gap-3">
@@ -56,6 +152,8 @@ export default function CocinaPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {COLUMNS.map((col) => {
             const cards = orders.filter((o) => o.status === col);
+            const soon = cards.filter((o) => !isLater(o));
+            const later = cards.filter(isLater);
             return (
               <div key={col} className="rounded-xl bg-neutral-50 p-3 ring-1 ring-neutral-200">
                 <div className="mb-3 flex items-center justify-between px-1">
@@ -65,78 +163,15 @@ export default function CocinaPage() {
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {cards.map((o) => {
-                    const step = FORWARD[o.status];
-                    return (
-                      <div key={o.id} className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-neutral-200">
-                        {/* Encabezado secundario: código + fecha (pequeño, tenue) */}
-                        <div className="flex items-center justify-between text-xs text-neutral-400">
-                          <Link href={`/pedidos/${o.id}`} className="font-medium text-blue-600 hover:underline">
-                            {o.code}
-                          </Link>
-                          <span>{formatDate(o.deliveryDate)}</span>
-                        </div>
-
-                        {/* Lo que se produce: protagonista de la tarjeta */}
-                        <ul className="mt-2 space-y-1.5">
-                          {o.items.map((it) => (
-                            <li key={it.id} className="flex items-baseline gap-2 leading-tight">
-                              <span className="text-xl font-bold tabular-nums text-neutral-900">
-                                {it.quantity}×
-                              </span>
-                              <span className="text-base font-semibold text-neutral-900">
-                                {it.variant.product.name}
-                                <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-
-                        {/* Cliente: secundario */}
-                        <p className="mt-2 text-xs text-neutral-400">
-                          {o.customer.name ?? o.customer.whatsappPhone}
-                        </p>
-                        {o.status === 'READY' && (
-                          <p className="mt-2 text-xs font-medium text-neutral-500">
-                            {o.deliveryType === 'PICKUP' ? '📦 Recoge en el local' : '🛵 Pasa a Domicilios'}
-                          </p>
-                        )}
-                        {!readOnly && (step || o.status === 'IN_PRODUCTION') && (
-                          <div className="mt-2 flex items-stretch gap-1.5">
-                            {step && (
-                              <button
-                                onClick={() => move(o.id, step.to)}
-                                disabled={busyId === o.id}
-                                className="flex-1 rounded-md bg-neutral-900 px-2 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-                              >
-                                {step.label} →
-                              </button>
-                            )}
-                            {o.status === 'IN_PRODUCTION' && (
-                              <>
-                                <button
-                                  onClick={() => move(o.id, 'CONFIRMED')}
-                                  disabled={busyId === o.id}
-                                  className="rounded-md border border-neutral-300 px-2 text-xs font-medium text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
-                                  title="Devolver a Confirmado: repone los insumos (si te equivocaste y no se horneó)"
-                                >
-                                  Devolver
-                                </button>
-                                <button
-                                  onClick={() => move(o.id, 'CONFIRMED', true)}
-                                  disabled={busyId === o.id}
-                                  className="rounded-md border border-red-200 px-1.5 text-[10px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
-                                  title="Dar de baja: producto no apto. Vuelve a Confirmado para rehacerlo; los insumos usados NO se reponen (merma)."
-                                >
-                                  Baja
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {soon.map((o) => renderCard(o, false))}
+                  {later.length > 0 && (
+                    <div className="flex items-center gap-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                      <span className="h-px flex-1 bg-neutral-200" />
+                      Para más adelante
+                      <span className="h-px flex-1 bg-neutral-200" />
+                    </div>
+                  )}
+                  {later.map((o) => renderCard(o, true))}
                   {cards.length === 0 && (
                     <p className="px-1 py-4 text-center text-xs text-neutral-400">Sin pedidos</p>
                   )}
