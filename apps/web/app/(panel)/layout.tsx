@@ -26,6 +26,7 @@ const NAV: NavEntry[] = [
   { href: '/domicilios', label: 'Domicilios', roles: ['OWNER'] },
   { href: '/mi-ruta', label: 'Mi ruta', roles: ['OWNER', 'DELIVERY'] },
   { href: '/mi-cuenta', label: 'Mi cuenta', roles: ['DELIVERY'] },
+  { href: '/contabilidad', label: 'Contabilidad', roles: ['OWNER'] },
   {
     // Datos base del negocio que se configuran una vez y casi no cambian.
     label: 'Base de datos',
@@ -34,10 +35,9 @@ const NAV: NavEntry[] = [
       { href: '/catalogo', label: 'Catálogo', roles: ['OWNER'] },
       { href: '/inventario', label: 'Inventario', roles: ['OWNER'] },
       { href: '/zonas', label: 'Zonas', roles: ['OWNER'] },
+      { href: '/equipo', label: 'Equipo', roles: ['OWNER'] },
     ],
   },
-  { href: '/contabilidad', label: 'Contabilidad', roles: ['OWNER'] },
-  { href: '/equipo', label: 'Equipo', roles: ['OWNER'] },
 ];
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
