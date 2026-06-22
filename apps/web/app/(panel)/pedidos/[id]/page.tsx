@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatCop, nextStatuses, PRODUCTION_STATUSES } from '@lhdv/shared';
-import { api } from '@/lib/api';
+import { api, API_ORIGIN } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { StatusBadge } from '@/app/components/StatusBadge';
@@ -121,6 +121,34 @@ export default function PedidoDetallePage() {
         </div>
         {order.notes && <p className="mt-3 text-sm text-neutral-500">Nota: {order.notes}</p>}
       </div>
+
+      {order.status === 'DELIVERED' && (
+        <div className={card}>
+          <h2 className="mb-3 text-sm font-semibold text-neutral-700">Comprobante de entrega</h2>
+          {order.deliveryPhotoPath ? (
+            <a
+              href={`${API_ORIGIN}${order.deliveryPhotoPath}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block"
+            >
+              <img
+                src={`${API_ORIGIN}${order.deliveryPhotoPath}`}
+                alt="Foto de entrega"
+                className="max-h-72 rounded-lg ring-1 ring-neutral-200"
+              />
+              <span className="mt-1 block text-xs font-medium text-blue-700 hover:underline">
+                Ver foto completa ↗
+              </span>
+            </a>
+          ) : (
+            <p className="text-sm text-neutral-400">Se entregó sin foto de comprobante.</p>
+          )}
+          {order.deliveredAt && (
+            <p className="mt-2 text-xs text-neutral-400">Entregado el {formatDateTime(order.deliveredAt)}</p>
+          )}
+        </div>
+      )}
 
       <div className={card}>
         <h2 className="mb-3 text-sm font-semibold text-neutral-700">Cambiar estado</h2>
