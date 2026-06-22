@@ -35,6 +35,7 @@ export class CatalogService {
         description: dto.description,
         category: dto.category,
         isSeasonal: dto.isSeasonal ?? false,
+        shelfLifeDays: dto.shelfLifeDays ?? null,
         variants: { create: dto.variants },
       },
       include: { variants: true },

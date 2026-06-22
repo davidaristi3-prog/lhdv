@@ -4,6 +4,7 @@ import { OrderStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeocodingService, GeoResult } from '../geocoding/geocoding.service';
 import { OrdersService } from '../orders/orders.service';
+import { createStockBatch } from '../finished-stock/batch.helper';
 import { CreateRouteDto } from './dto/route.dto';
 
 /** Estados de pedido que pueden entrar a una ruta de domicilio. */
@@ -414,6 +415,7 @@ export class RoutesService {
           where: { id: it.productVariantId },
           data: { readyStock: { increment: producedQty } },
         });
+        await createStockBatch(this.prisma, it.productVariantId, producedQty, opts.userId);
         await this.prisma.finishedStockMovement.create({
           data: {
             productVariantId: it.productVariantId,

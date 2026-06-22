@@ -1,13 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { createStockBatch, consumeFromBatches } from './batch.helper';
 
 @Injectable()
 export class FinishedStockService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Todas las presentaciones activas con su par/listos (para el módulo de stock). */
-  list() {
-    return this.prisma.productVariant.findMany({
+  async list() {
+    const variants = await this.prisma.productVariant.findMany({
       where: { active: true, product: { active: true } },
       select: {
         id: true,
@@ -15,9 +16,32 @@ export class FinishedStockService {
         priceCop: true,
         parStock: true,
         readyStock: true,
-        product: { select: { name: true, category: true } },
+        product: { select: { name: true, category: true, shelfLifeDays: true } },
+        stockBatches: { where: { quantity: { gt: 0 } }, select: { quantity: true, expiresAt: true } },
       },
       orderBy: [{ product: { name: 'asc' } }, { name: 'asc' }],
+    });
+    const now = Date.now();
+    const soon = now + 86_400_000; // 1 día
+    return variants.map(({ stockBatches, product, ...rest }) => {
+      let expired = 0; // unidades ya vencidas (no vendibles)
+      let expiringSoon = 0; // vencen en <= 1 día
+      let nextExpiryMs: number | null = null;
+      for (const b of stockBatches) {
+        if (!b.expiresAt) continue;
+        const t = new Date(b.expiresAt).getTime();
+        if (t <= now) expired += b.quantity;
+        else if (t <= soon) expiringSoon += b.quantity;
+        if (nextExpiryMs === null || t < nextExpiryMs) nextExpiryMs = t;
+      }
+      return {
+        ...rest,
+        product: { name: product.name, category: product.category },
+        shelfLifeDays: product.shelfLifeDays,
+        expired,
+        expiringSoon,
+        nextExpiry: nextExpiryMs ? new Date(nextExpiryMs).toISOString() : null,
+      };
     });
   }
 
@@ -43,6 +67,7 @@ export class FinishedStockService {
           where: { id: variantId },
           data: { readyStock: { increment: quantity } },
         });
+        await createStockBatch(tx, variantId, quantity, userId);
 
         const recipe = await tx.recipeItem.findMany({
           where: { productVariantId: variantId },
@@ -94,20 +119,51 @@ export class FinishedStockService {
       });
       if (!cur) throw new NotFoundException('Presentación no encontrada');
 
+      const diff = quantity - cur.readyStock;
       const variant = await tx.productVariant.update({
         where: { id: variantId },
         data: { readyStock: quantity },
       });
+      // Ajusta los lotes para que cuadren con el conteo: si subió, nuevo lote; si bajó, FIFO.
+      if (diff > 0) await createStockBatch(tx, variantId, diff, userId);
+      else if (diff < 0) await consumeFromBatches(tx, variantId, -diff);
       await tx.finishedStockMovement.create({
         data: {
           productVariantId: variantId,
           type: 'ADJUSTMENT',
-          quantity: Math.abs(quantity - cur.readyStock),
+          quantity: Math.abs(diff),
           reason: notes ?? `Ajuste a ${quantity}`,
           createdById: userId,
         },
       });
       return variant;
+    });
+  }
+
+  /** Da de baja (merma) los lotes vencidos de una presentación. */
+  async scrapExpired(variantId: string, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const expired = await tx.stockBatch.findMany({
+        where: { productVariantId: variantId, quantity: { gt: 0 }, expiresAt: { lte: new Date() } },
+        select: { id: true, quantity: true },
+      });
+      const total = expired.reduce((s, b) => s + b.quantity, 0);
+      if (total === 0) return { scrapped: 0 };
+      await tx.stockBatch.deleteMany({ where: { id: { in: expired.map((b) => b.id) } } });
+      await tx.productVariant.update({
+        where: { id: variantId },
+        data: { readyStock: { decrement: total } },
+      });
+      await tx.finishedStockMovement.create({
+        data: {
+          productVariantId: variantId,
+          type: 'ADJUSTMENT',
+          quantity: total,
+          reason: 'Baja por vencimiento',
+          createdById: userId,
+        },
+      });
+      return { scrapped: total };
     });
   }
 

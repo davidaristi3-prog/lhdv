@@ -3,7 +3,7 @@
 import { formatCop } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { formatDateTime } from '@/lib/labels';
+import { formatDate, formatDateTime } from '@/lib/labels';
 
 interface StockRow {
   id: string;
@@ -12,6 +12,10 @@ interface StockRow {
   parStock: number;
   readyStock: number;
   product: { name: string; category: string | null };
+  shelfLifeDays?: number | null;
+  expired?: number;
+  expiringSoon?: number;
+  nextExpiry?: string | null;
 }
 type FinishedMoveType = 'PRODUCTION' | 'SALE' | 'RETURN' | 'ADJUSTMENT';
 interface StockMovement {
@@ -64,6 +68,11 @@ export default function ProductosListosPage() {
     await api(`/finished-stock/${r.id}/adjust`, { method: 'POST', body: JSON.stringify({ quantity: Number(v) }) });
     await reloadAll();
   }
+  async function darBajaVencidas(r: StockRow) {
+    if (!confirm(`¿Dar de baja las ${r.expired} unidad(es) vencida(s) de "${label(r)}"? Queda como merma.`)) return;
+    await api(`/finished-stock/${r.id}/scrap-expired`, { method: 'POST' });
+    await reloadAll();
+  }
 
   // En stock: los gestionados por objetivo (par>0) y los que tienen existencias por una
   // devolución de domicilio (ready>0 aunque no tengan objetivo).
@@ -113,7 +122,20 @@ export default function ProductosListosPage() {
                   const e = estado(r.parStock, r.readyStock);
                   return (
                     <tr key={r.id} className={r.readyStock < r.parStock ? 'bg-amber-50/60' : ''}>
-                      <td className="px-4 py-2 font-medium">{label(r)}</td>
+                      <td className="px-4 py-2 font-medium">
+                        {label(r)}
+                        {r.expired ? (
+                          <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                            🔴 {r.expired} vencida(s)
+                          </span>
+                        ) : r.expiringSoon ? (
+                          <span className="ml-2 rounded bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
+                            🟠 {r.expiringSoon} vence(n) pronto
+                          </span>
+                        ) : r.nextExpiry ? (
+                          <span className="ml-2 text-xs text-neutral-400">vence {formatDate(r.nextExpiry)}</span>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-2 text-center" title={e.label}>
                         {e.dot}
                       </td>
@@ -124,6 +146,14 @@ export default function ProductosListosPage() {
                       </td>
                       <td className={`px-4 py-2 text-right text-base font-semibold ${e.cls}`}>{r.readyStock}</td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {!!r.expired && (
+                          <button
+                            onClick={() => darBajaVencidas(r)}
+                            className="mr-1 rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700"
+                          >
+                            Baja vencidas
+                          </button>
+                        )}
                         <button
                           onClick={() => produce(r)}
                           className="rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-800"

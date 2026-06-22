@@ -53,6 +53,11 @@ export class CreateProductDto {
   @IsBoolean()
   isSeasonal?: boolean;
 
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  shelfLifeDays?: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateVariantDto)
@@ -79,6 +84,11 @@ export class UpdateProductDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  shelfLifeDays?: number;
 }
 
 export class UpdateVariantDto {

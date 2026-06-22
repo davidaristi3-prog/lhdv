@@ -22,6 +22,7 @@ export interface Product {
   category: string | null;
   isSeasonal: boolean;
   active: boolean;
+  shelfLifeDays?: number | null;
   variants: Variant[];
 }
 
@@ -120,6 +121,7 @@ export interface Customer {
   name: string | null;
   whatsappPhone: string;
   notes: string | null;
+  discountPercent?: number | null;
   createdAt: string;
   _count?: { orders: number };
   orders?: Order[];

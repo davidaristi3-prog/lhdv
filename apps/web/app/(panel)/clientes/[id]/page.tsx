@@ -42,6 +42,14 @@ export default function ClienteDetallePage() {
     await reload();
   }
 
+  async function setDiscount(v: string) {
+    await api(`/customers/${params.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ discountPercent: Number(v) || 0 }),
+    });
+    await reload();
+  }
+
   if (loading) return <p className="text-neutral-500">Cargando…</p>;
   if (error) return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>;
   if (!customer) return null;
@@ -61,6 +69,18 @@ export default function ClienteDetallePage() {
         <p className="text-neutral-500">WhatsApp</p>
         <p className="font-medium">{customer.whatsappPhone}</p>
         {customer.notes && <p className="mt-2 text-neutral-500">Nota: {customer.notes}</p>}
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-neutral-500">Descuento mayorista:</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            defaultValue={customer.discountPercent ?? ''}
+            onBlur={(e) => setDiscount(e.target.value)}
+            className="w-16 rounded-lg border border-neutral-300 px-2 py-1 text-sm"
+          />
+          <span className="text-neutral-500">%</span>
+        </div>
       </div>
 
       {/* Direcciones */}

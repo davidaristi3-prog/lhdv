@@ -101,6 +101,7 @@ model Customer {
   whatsappPhone String    @unique
   name          String?
   notes         String?
+  discountPercent Int? // % de descuento del cliente (mayorista); null/0 = sin descuento
   consentAt     DateTime? // Habeas Data (Ley 1581): cuándo aceptó tratamiento de datos
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -138,6 +139,7 @@ model Product {
   category    String?
   isSeasonal  Boolean  @default(false)
   active      Boolean  @default(true)
+  shelfLifeDays Int? // vida útil en días para control de vencimiento (null = no vence)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -161,6 +163,7 @@ model ProductVariant {
   orderItems        OrderItem[]
   recipeItems       RecipeItem[]
   finishedMovements FinishedStockMovement[]
+  stockBatches      StockBatch[]
 
   @@unique([productId, name])
 }
@@ -529,4 +532,22 @@ model FinishedStockMovement {
 
   @@index([productVariantId])
   @@index([orderId])
+}
+
+// Lote de producto terminado: cada producción para stock genera un lote con su fecha de
+// vencimiento. El stock vigente de una presentación es la suma de quantity de sus lotes;
+// se consume FIFO (lo más viejo primero) y se da de baja lo vencido.
+model StockBatch {
+  id               String    @id @default(cuid())
+  productVariantId String
+  quantity         Int // unidades que quedan en el lote
+  producedAt       DateTime  @default(now())
+  expiresAt        DateTime? // null si el producto no tiene vida útil definida
+  createdById      String?
+  createdAt        DateTime  @default(now())
+
+  variant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  @@index([productVariantId])
+  @@index([expiresAt])
 }

@@ -49,6 +49,13 @@ function ProductCard({ product, onChange }: { product: Product; onChange: () => 
     await api(`/catalog/products/${product.id}`, { method: 'PATCH', body: JSON.stringify({ isSeasonal }) });
     onChange();
   }
+  async function setShelfLife(v: string) {
+    await api(`/catalog/products/${product.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ shelfLifeDays: Number(v) || 0 }),
+    });
+    onChange();
+  }
   return (
     <div className={`rounded-xl bg-white p-4 ring-1 ring-neutral-200 ${product.active ? '' : 'opacity-60'}`}>
       <div className="mb-3 flex items-center justify-between">
@@ -57,6 +64,17 @@ function ProductCard({ product, onChange }: { product: Product; onChange: () => 
           {product.category && <span className="ml-2 text-xs text-neutral-400">{product.category}</span>}
         </div>
         <div className="flex items-center gap-4 text-sm">
+          <label className="flex items-center gap-1.5 text-neutral-600" title="Vida útil en días (0 = no vence)">
+            Vence en
+            <input
+              type="number"
+              min={0}
+              defaultValue={product.shelfLifeDays ?? ''}
+              onBlur={(e) => setShelfLife(e.target.value)}
+              className="w-14 rounded border border-neutral-300 px-1.5 py-0.5 text-sm"
+            />
+            días
+          </label>
           <label className="flex items-center gap-1.5 text-neutral-600">
             <input type="checkbox" checked={product.isSeasonal} onChange={(e) => toggleSeasonal(e.target.checked)} />
             Temporada

@@ -45,6 +45,12 @@ export class FinishedStockController {
     return this.stock.createProductionOrder(variantId, dto.quantity, user.sub);
   }
 
+  /** Da de baja los lotes vencidos de una presentación (merma). */
+  @Post(':variantId/scrap-expired')
+  scrapExpired(@Param('variantId') variantId: string, @CurrentUser() user: JwtPayload) {
+    return this.stock.scrapExpired(variantId, user.sub);
+  }
+
   @Post(':variantId/adjust')
   adjust(
     @Param('variantId') variantId: string,

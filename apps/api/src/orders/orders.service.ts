@@ -12,6 +12,7 @@ import {
   type OrderStatus,
 } from '@lhdv/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { createStockBatch, consumeFromBatches } from '../finished-stock/batch.helper';
 import { CreateOrderDto } from './dto/create-order.dto';
 
 interface TransitionOptions {
@@ -85,6 +86,13 @@ export class OrdersService {
     const { itemsData, subtotal } = await this.buildOrderItems(items);
 
     const isFree = dto.freeReason != null; // regalo/garantía: mueve inventario, no cobra
+    // Descuento del cliente (mayorista): se aplica al subtotal de lista.
+    const customerRow = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { discountPercent: true },
+    });
+    const discount = isFree ? 0 : (customerRow?.discountPercent ?? 0);
+    const netSubtotal = Math.round(subtotal * (1 - discount / 100));
     const deliveryCostCop = isFree ? 0 : (dto.deliveryCostCop ?? 0);
     const delivery = await this.resolveAddress(customerId, dto);
 
@@ -104,7 +112,7 @@ export class OrdersService {
         deliveryZone: delivery.deliveryZone,
         deliveryCostCop,
         subtotalCop: subtotal,
-        totalCop: isFree ? 0 : subtotal + deliveryCostCop,
+        totalCop: isFree ? 0 : netSubtotal + deliveryCostCop,
         notes: dto.notes,
         customer: { connect: { id: customerId } },
         createdBy: { connect: { id: userId } },
@@ -371,6 +379,7 @@ export class OrdersService {
             where: { id: it.productVariantId },
             data: { readyStock: { increment: it.quantity } },
           });
+          await createStockBatch(tx, it.productVariantId, it.quantity, opts.byUserId);
           await tx.finishedStockMovement.create({
             data: {
               productVariantId: it.productVariantId,
@@ -472,44 +481,29 @@ export class OrdersService {
     });
     if (items.length === 0) return false;
 
-    const variantIds = [...new Set(items.map((i) => i.productVariantId))];
-    // Cubre con cualquier presentación que tenga existencias listas (por objetivo de
-    // stock o por una devolución de domicilio), no solo las gestionadas por par.
-    const variants = await tx.productVariant.findMany({
-      where: { id: { in: variantIds }, readyStock: { gt: 0 } },
-      select: { id: true, readyStock: true },
-    });
-    const available = new Map(variants.map((v) => [v.id, v.readyStock]));
-    const used = new Map<string, number>();
-
     let allFromStock = true;
     for (const it of items) {
-      const avail = available.get(it.productVariantId) ?? 0;
-      const take = Math.min(avail, it.quantity); // toma lo que haya, hasta la cantidad del renglón
-      if (take > 0) {
-        available.set(it.productVariantId, avail - take);
-        used.set(it.productVariantId, (used.get(it.productVariantId) ?? 0) + take);
-        await tx.orderItem.update({ where: { id: it.id }, data: { fromStockQty: take } });
+      // Toma de los lotes vigentes (no vencidos) FIFO por vencimiento; parte el renglón
+      // si el stock no alcanza toda la cantidad (el resto se produce).
+      const took = await consumeFromBatches(tx, it.productVariantId, it.quantity);
+      if (took > 0) {
+        await tx.productVariant.update({
+          where: { id: it.productVariantId },
+          data: { readyStock: { decrement: took } },
+        });
+        await tx.orderItem.update({ where: { id: it.id }, data: { fromStockQty: took } });
+        await tx.finishedStockMovement.create({
+          data: {
+            productVariantId: it.productVariantId,
+            type: 'SALE',
+            quantity: took,
+            orderId,
+            reason: 'Cubierto desde stock al enviar a cocina',
+          },
+        });
       }
-      if (take < it.quantity) allFromStock = false; // queda algo por producir
+      if (took < it.quantity) allFromStock = false;
     }
-
-    for (const [variantId, qty] of used) {
-      await tx.productVariant.update({
-        where: { id: variantId },
-        data: { readyStock: { decrement: qty } },
-      });
-      await tx.finishedStockMovement.create({
-        data: {
-          productVariantId: variantId,
-          type: 'SALE',
-          quantity: qty,
-          orderId,
-          reason: 'Cubierto desde stock al enviar a cocina',
-        },
-      });
-    }
-
     return allFromStock;
   }
 
