@@ -82,19 +82,16 @@ export class OrdersService {
     const { itemsData, subtotal } = await this.buildOrderItems(items);
 
     const deliveryCostCop = dto.deliveryCostCop ?? 0;
-    // El código (consecutivo) se asigna solo al entrar a cocina; un borrador va sin número.
-    const code = dto.confirm ? await this.nextOrderCode() : null;
     const delivery = await this.resolveAddress(customerId, dto);
 
-    // La persona que toma el pedido decide: mandarlo directo a cocina (CONFIRMED)
-    // o dejarlo en borrador para terminar de armarlo.
-    const initialStatus: OrderStatus = dto.confirm ? 'CONFIRMED' : 'DRAFT';
-
-    return this.prisma.order.create({
+    // Siempre se crea como borrador (sin número). Si hay que enviarlo a cocina, se hace
+    // a través de confirmManual, que evalúa el stock de producto terminado, decide si
+    // pasa por cocina o queda listo, y asigna el consecutivo.
+    const created = await this.prisma.order.create({
       data: {
-        code,
+        code: null,
         channel: dto.channel,
-        status: initialStatus,
+        status: 'DRAFT',
         isCustom: dto.isCustom ?? false,
         deliveryType: dto.deliveryType,
         deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
@@ -111,17 +108,17 @@ export class OrdersService {
           : {}),
         items: { create: itemsData },
         statusEvents: {
-          create: {
-            toStatus: initialStatus,
-            byUserId: userId,
-            reason: dto.confirm
-              ? 'Creado y enviado a cocina manualmente'
-              : 'Pedido creado manualmente',
-          },
+          create: { toStatus: 'DRAFT', byUserId: userId, reason: 'Pedido creado manualmente' },
         },
       },
       include: this.fullInclude(),
     });
+
+    if (dto.confirm) {
+      await this.confirmManual(created.id, { byUserId: userId });
+      return this.get(created.id);
+    }
+    return created;
   }
 
   /** Calcula los OrderItem (con precios snapshot) y el subtotal a partir de los items del DTO. */
@@ -257,7 +254,7 @@ export class OrdersService {
       // interactiva contra Postgres remoto (Neon).
       if (to === 'IN_PRODUCTION' && order.inventoryDeductedAt == null) {
         const orderItems = await tx.orderItem.findMany({
-          where: { orderId },
+          where: { orderId, fromStock: false }, // los cubiertos desde stock no se producen
           select: { quantity: true, productVariantId: true },
         });
         const variantIds = [...new Set(orderItems.map((it) => it.productVariantId))];
@@ -328,6 +325,29 @@ export class OrdersService {
         await tx.order.update({ where: { id: orderId }, data: { inventoryDeductedAt: null } });
       }
 
+      // Cancelar devuelve al stock los productos terminados que el pedido había tomado.
+      if (to === 'CANCELLED') {
+        const taken = await tx.finishedStockMovement.findMany({
+          where: { orderId, type: 'SALE' },
+          select: { productVariantId: true, quantity: true },
+        });
+        for (const m of taken) {
+          await tx.productVariant.update({
+            where: { id: m.productVariantId },
+            data: { readyStock: { increment: m.quantity } },
+          });
+          await tx.finishedStockMovement.create({
+            data: {
+              productVariantId: m.productVariantId,
+              type: 'RETURN',
+              quantity: m.quantity,
+              orderId,
+              reason: 'Pedido cancelado',
+            },
+          });
+        }
+      }
+
       return updated;
     }, { maxWait: 10000, timeout: 20000 });
   }
@@ -361,23 +381,93 @@ export class OrdersService {
         throw new BadRequestException('Agregá al menos un producto antes de enviar a cocina');
       }
 
-      // Al entrar a cocina recibe su número consecutivo (si aún no tenía).
+      // Cubre con stock de producto terminado los renglones que alcance. Si TODO el
+      // pedido queda cubierto, no pasa por cocina: va directo a Listo.
+      const allFromStock = await this.consumeFinishedStock(tx, orderId);
+      const target: OrderStatus = allFromStock ? 'READY' : 'CONFIRMED';
+
+      // Al entrar a cocina (o quedar listo desde stock) recibe su número consecutivo.
       const code = order.code ?? (await this.nextOrderCode(tx));
       const updated = await tx.order.update({
         where: { id: orderId },
-        data: { status: 'CONFIRMED', code },
+        data: { status: target, code },
       });
       await tx.orderStatusEvent.create({
         data: {
           orderId,
           fromStatus: from,
-          toStatus: 'CONFIRMED',
+          toStatus: target,
           byUserId: opts.byUserId ?? null,
-          reason: opts.reason ?? 'Enviado a cocina manualmente',
+          reason: allFromStock
+            ? 'Cubierto desde stock listo (no pasó por cocina)'
+            : (opts.reason ?? 'Enviado a cocina manualmente'),
         },
       });
       return updated;
     });
+  }
+
+  /**
+   * Al enviar a cocina: cubre con el stock de producto terminado los renglones que
+   * alcancen (readyStock >= cantidad del renglón). Los marca `fromStock`, descuenta
+   * el stock y registra la venta. No parte renglones: si el stock no cubre toda la
+   * cantidad de un renglón, ese renglón se produce normal.
+   * Devuelve true si TODOS los renglones quedaron cubiertos desde stock.
+   */
+  private async consumeFinishedStock(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<boolean> {
+    const items = await tx.orderItem.findMany({
+      where: { orderId },
+      select: { id: true, quantity: true, productVariantId: true },
+    });
+    if (items.length === 0) return false;
+
+    const variantIds = [...new Set(items.map((i) => i.productVariantId))];
+    const variants = await tx.productVariant.findMany({
+      where: { id: { in: variantIds }, parStock: { gt: 0 } },
+      select: { id: true, readyStock: true },
+    });
+    const available = new Map(variants.map((v) => [v.id, v.readyStock]));
+    const used = new Map<string, number>();
+    const fromStockItemIds: string[] = [];
+
+    let allFromStock = true;
+    for (const it of items) {
+      const avail = available.get(it.productVariantId) ?? 0;
+      if (avail >= it.quantity) {
+        available.set(it.productVariantId, avail - it.quantity);
+        used.set(it.productVariantId, (used.get(it.productVariantId) ?? 0) + it.quantity);
+        fromStockItemIds.push(it.id);
+      } else {
+        allFromStock = false;
+      }
+    }
+
+    if (fromStockItemIds.length > 0) {
+      await tx.orderItem.updateMany({
+        where: { id: { in: fromStockItemIds } },
+        data: { fromStock: true },
+      });
+      for (const [variantId, qty] of used) {
+        await tx.productVariant.update({
+          where: { id: variantId },
+          data: { readyStock: { decrement: qty } },
+        });
+        await tx.finishedStockMovement.create({
+          data: {
+            productVariantId: variantId,
+            type: 'SALE',
+            quantity: qty,
+            orderId,
+            reason: 'Cubierto desde stock al enviar a cocina',
+          },
+        });
+      }
+    }
+
+    return allFromStock;
   }
 
   /** Descarta (elimina) un borrador. Solo DRAFT, que no tocó nada; la cascada borra items y eventos. */

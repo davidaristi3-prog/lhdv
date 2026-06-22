@@ -78,14 +78,20 @@ export default function CocinaPage() {
           )}
         </div>
 
-        {/* Lo que se produce: protagonista de la tarjeta */}
+        {/* Lo que se produce: protagonista. Lo cubierto desde stock va atenuado (no se hornea). */}
         <ul className="mt-2 space-y-1.5">
           {o.items.map((it) => (
-            <li key={it.id} className="flex items-baseline gap-2 leading-tight">
+            <li
+              key={it.id}
+              className={`flex items-baseline gap-2 leading-tight ${it.fromStock ? 'opacity-50' : ''}`}
+            >
               <span className="text-xl font-bold tabular-nums text-neutral-900">{it.quantity}×</span>
               <span className="text-base font-semibold text-neutral-900">
                 {it.variant.product.name}
                 <span className="font-medium text-neutral-600"> · {it.variant.name}</span>
+                {it.fromStock && (
+                  <span className="ml-1 text-xs font-medium text-emerald-600">✓ de stock</span>
+                )}
               </span>
             </li>
           ))}

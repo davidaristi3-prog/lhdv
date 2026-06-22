@@ -91,6 +91,9 @@ export default function PedidoDetallePage() {
               <div>
                 <p className="font-medium">
                   {it.quantity}× {it.variant.product.name} · {it.variant.name}
+                  {it.fromStock && (
+                    <span className="ml-1 text-xs font-medium text-emerald-600">✓ de stock</span>
+                  )}
                 </p>
                 {it.customText && <p className="text-neutral-500">“{it.customText}”</p>}
                 {it.additions && it.additions.length > 0 && (

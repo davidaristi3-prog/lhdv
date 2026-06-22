@@ -70,6 +70,7 @@ export interface OrderItem {
   unitPriceCop: number;
   customText: string | null;
   notes: string | null;
+  fromStock?: boolean; // se cubrió desde el stock de producto terminado (no se hornea)
   variant: Variant & { product: Product };
   additions?: OrderItemAddition[];
 }
