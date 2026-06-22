@@ -114,6 +114,18 @@ export class RoutesService {
   }
 
   /**
+   * Rutas EN CURSO con sus paradas (estado + coordenadas) y la última ubicación del
+   * domiciliario. Alimenta el tablero de seguimiento en vivo (OWNER y comercial/SALES).
+   */
+  liveRoutes() {
+    return this.prisma.deliveryRoute.findMany({
+      where: { status: 'IN_PROGRESS' },
+      orderBy: { date: 'asc' },
+      include: routeInclude,
+    });
+  }
+
+  /**
    * Sugiere a qué domiciliario asignar cada pedido por enrutar: por la zona del
    * pedido (la cubre quien tiene tarifa en ella) y respetando su capacidad. Solo
    * lectura — devuelve una propuesta agrupada que el operador edita y confirma.

@@ -24,6 +24,7 @@ const NAV: NavEntry[] = [
   { href: '/pedidos', label: 'Comercial', roles: ['OWNER', 'SALES', 'KITCHEN'] },
   { href: '/cocina', label: 'Producción', roles: ['OWNER', 'KITCHEN', 'SALES'] },
   { href: '/logistica', label: 'Logística', roles: ['OWNER'] },
+  { href: '/seguimiento', label: 'Seguimiento', roles: ['OWNER', 'SALES'] },
   { href: '/mi-ruta', label: 'Mi ruta', roles: ['OWNER', 'DELIVERY'] },
   { href: '/mi-cuenta', label: 'Mi cuenta', roles: ['DELIVERY'] },
   { href: '/contabilidad', label: 'Contabilidad', roles: ['OWNER'] },

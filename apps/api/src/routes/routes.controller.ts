@@ -46,6 +46,13 @@ export class RoutesController {
     return this.routes.list();
   }
 
+  // Tablero de seguimiento en vivo: lo ve también el rol comercial (SALES).
+  @Roles(UserRole.OWNER, UserRole.SALES)
+  @Get('live')
+  live() {
+    return this.routes.liveRoutes();
+  }
+
   @Roles(UserRole.OWNER, UserRole.DELIVERY)
   @Get(':id')
   get(@Param('id') id: string) {
