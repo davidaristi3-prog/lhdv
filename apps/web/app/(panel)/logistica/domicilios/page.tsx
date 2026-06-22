@@ -64,7 +64,7 @@ export default function DomiciliosPage() {
         method: 'POST',
         body: JSON.stringify({ date, courierId: courierId || undefined, orderIds: Array.from(selected) }),
       });
-      router.push(`/domicilios/${route.id}`);
+      router.push(`/logistica/domicilios/${route.id}`);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -73,8 +73,6 @@ export default function DomiciliosPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold">Domicilios</h1>
-
       {/* Sugerencia automática por zona y capacidad */}
       <SugerenciaRutas couriers={couriers} date={date} onCreated={refreshAll} />
 
@@ -138,7 +136,7 @@ export default function DomiciliosPage() {
           {routes.data?.map((r) => (
             <Link
               key={r.id}
-              href={`/domicilios/${r.id}`}
+              href={`/logistica/domicilios/${r.id}`}
               className="flex items-center justify-between px-5 py-3 text-sm hover:bg-neutral-50"
             >
               <div className="flex items-center gap-3">

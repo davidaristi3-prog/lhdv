@@ -58,7 +58,7 @@ export default function RutaDetallePage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/domicilios" className="text-sm text-neutral-500 hover:underline">
+        <Link href="/logistica/domicilios" className="text-sm text-neutral-500 hover:underline">
           ← Domicilios
         </Link>
         <h1 className="text-lg font-semibold">Ruta · {route.courier?.name ?? 'Sin asignar'}</h1>

@@ -23,7 +23,7 @@ const isGroup = (n: NavEntry): n is NavGroup => 'children' in n;
 const NAV: NavEntry[] = [
   { href: '/pedidos', label: 'Pedidos', roles: ['OWNER', 'SALES', 'KITCHEN', 'DELIVERY'] },
   { href: '/cocina', label: 'Cocina', roles: ['OWNER', 'KITCHEN', 'SALES'] },
-  { href: '/domicilios', label: 'Domicilios', roles: ['OWNER'] },
+  { href: '/logistica', label: 'Logística', roles: ['OWNER'] },
   { href: '/mi-ruta', label: 'Mi ruta', roles: ['OWNER', 'DELIVERY'] },
   { href: '/mi-cuenta', label: 'Mi cuenta', roles: ['DELIVERY'] },
   { href: '/contabilidad', label: 'Contabilidad', roles: ['OWNER'] },
