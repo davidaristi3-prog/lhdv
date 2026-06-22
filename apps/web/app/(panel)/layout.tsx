@@ -21,7 +21,7 @@ type NavEntry = NavLink | NavGroup;
 const isGroup = (n: NavEntry): n is NavGroup => 'children' in n;
 
 const NAV: NavEntry[] = [
-  { href: '/pedidos', label: 'Pedidos', roles: ['OWNER', 'SALES', 'KITCHEN', 'DELIVERY'] },
+  { href: '/pedidos', label: 'Pedidos', roles: ['OWNER', 'SALES', 'KITCHEN'] },
   { href: '/cocina', label: 'Cocina', roles: ['OWNER', 'KITCHEN', 'SALES'] },
   { href: '/logistica', label: 'Logística', roles: ['OWNER'] },
   { href: '/mi-ruta', label: 'Mi ruta', roles: ['OWNER', 'DELIVERY'] },

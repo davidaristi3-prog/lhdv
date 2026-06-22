@@ -7,6 +7,9 @@ import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload } from '../auth/jwt-payload.interface';
 
+// El domiciliario (DELIVERY) no accede a los pedidos del negocio: trabaja con /routes
+// (Mi ruta) y /couriers (Mi cuenta). Los métodos de escritura restringen más (OWNER/SALES).
+@Roles(UserRole.OWNER, UserRole.SALES, UserRole.KITCHEN)
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
