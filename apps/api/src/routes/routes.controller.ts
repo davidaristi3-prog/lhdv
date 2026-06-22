@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -24,14 +25,14 @@ export class RoutesController {
 
   @Roles(UserRole.OWNER)
   @Get('available')
-  available() {
-    return this.routes.availableOrders();
+  available(@Query('upcoming') upcoming?: string) {
+    return this.routes.availableOrders(upcoming === 'true');
   }
 
   @Roles(UserRole.OWNER)
   @Get('suggest')
-  suggest() {
-    return this.routes.suggestAssignments();
+  suggest(@Query('upcoming') upcoming?: string) {
+    return this.routes.suggestAssignments(upcoming === 'true');
   }
 
   @Roles(UserRole.OWNER, UserRole.DELIVERY)

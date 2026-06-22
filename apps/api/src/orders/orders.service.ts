@@ -12,7 +12,7 @@ import {
   type OrderStatus,
 } from '@lhdv/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { createStockBatch, consumeFromBatches } from '../finished-stock/batch.helper';
+import { createStockBatch, consumeFromBatches, expiredStockQty } from '../finished-stock/batch.helper';
 import { CreateOrderDto } from './dto/create-order.dto';
 
 interface TransitionOptions {
@@ -360,6 +360,9 @@ export class OrdersService {
             where: { id: m.productVariantId },
             data: { readyStock: { increment: m.quantity } },
           });
+          // Vuelve a stock CON su lote. Si no se crea el lote, readyStock queda por encima
+          // de la suma de lotes y el consumo siguiente toma de menos (lo que salió de stock).
+          await createStockBatch(tx, m.productVariantId, m.quantity, opts.byUserId);
           await tx.finishedStockMovement.create({
             data: {
               productVariantId: m.productVariantId,
@@ -488,26 +491,36 @@ export class OrdersService {
 
     let allFromStock = true;
     for (const it of items) {
-      // Toma de los lotes vigentes (no vencidos) FIFO por vencimiento; parte el renglón
-      // si el stock no alcanza toda la cantidad (el resto se produce).
-      const took = await consumeFromBatches(tx, it.productVariantId, it.quantity);
-      if (took > 0) {
+      // Lo disponible para vender = readyStock menos lo vencido (lo vencido no se vende).
+      // Se usa readyStock (no solo la suma de lotes) para que también se cubra el stock
+      // histórico sin lote; así nunca se toma de menos de lo que figura disponible.
+      const variant = await tx.productVariant.findUnique({
+        where: { id: it.productVariantId },
+        select: { readyStock: true },
+      });
+      const expired = await expiredStockQty(tx, it.productVariantId);
+      const sellable = Math.max(0, (variant?.readyStock ?? 0) - expired);
+      const take = Math.min(sellable, it.quantity);
+      if (take > 0) {
+        // Descuenta de los lotes vigentes FIFO por vencimiento (puede quedar corto si hay
+        // stock sin lote); igual se descuenta de readyStock para que cuadren.
+        await consumeFromBatches(tx, it.productVariantId, take);
         await tx.productVariant.update({
           where: { id: it.productVariantId },
-          data: { readyStock: { decrement: took } },
+          data: { readyStock: { decrement: take } },
         });
-        await tx.orderItem.update({ where: { id: it.id }, data: { fromStockQty: took } });
+        await tx.orderItem.update({ where: { id: it.id }, data: { fromStockQty: take } });
         await tx.finishedStockMovement.create({
           data: {
             productVariantId: it.productVariantId,
             type: 'SALE',
-            quantity: took,
+            quantity: take,
             orderId,
             reason: 'Cubierto desde stock al enviar a cocina',
           },
         });
       }
-      if (took < it.quantity) allFromStock = false;
+      if (take < it.quantity) allFromStock = false;
     }
     return allFromStock;
   }

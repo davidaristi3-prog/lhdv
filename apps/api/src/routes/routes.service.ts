@@ -84,10 +84,29 @@ export class RoutesService {
   // ─── Lectura ────────────────────────────────────────────────
 
   /** Pedidos listos para domicilio que aún no están en una ruta. */
-  availableOrders() {
+  /**
+   * Filtro por fecha para enrutar: por defecto solo pedidos de HOY o atrasados (así no se
+   * manda hoy algo que era para mañana). Con `includeUpcoming` trae también los próximos
+   * días, para adelantar un pedido a propósito.
+   */
+  private dueDateFilter(includeUpcoming: boolean) {
+    if (includeUpcoming) return {};
+    const tomorrow = new Date();
+    tomorrow.setUTCHours(0, 0, 0, 0);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    return { OR: [{ deliveryDate: null }, { deliveryDate: { lt: tomorrow } }] };
+  }
+
+  availableOrders(includeUpcoming = false) {
     return this.prisma.order.findMany({
-      where: { routeId: null, deliveryType: { not: 'PICKUP' }, status: { in: ROUTABLE }, isStockProduction: false },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        routeId: null,
+        deliveryType: { not: 'PICKUP' },
+        status: { in: ROUTABLE },
+        isStockProduction: false,
+        ...this.dueDateFilter(includeUpcoming),
+      },
+      orderBy: [{ deliveryDate: 'asc' }, { createdAt: 'asc' }],
       include: {
         customer: { select: { id: true, name: true, whatsappPhone: true } },
         customerAddress: true,
@@ -159,9 +178,15 @@ export class RoutesService {
    * pedido (la cubre quien tiene tarifa en ella) y respetando su capacidad. Solo
    * lectura — devuelve una propuesta agrupada que el operador edita y confirma.
    */
-  async suggestAssignments() {
+  async suggestAssignments(includeUpcoming = false) {
     const orders = await this.prisma.order.findMany({
-      where: { routeId: null, deliveryType: { not: 'PICKUP' }, status: { in: ROUTABLE }, isStockProduction: false },
+      where: {
+        routeId: null,
+        deliveryType: { not: 'PICKUP' },
+        status: { in: ROUTABLE },
+        isStockProduction: false,
+        ...this.dueDateFilter(includeUpcoming),
+      },
       orderBy: [{ deliveryDate: 'asc' }, { createdAt: 'asc' }],
       include: {
         customer: { select: { id: true, name: true, whatsappPhone: true } },

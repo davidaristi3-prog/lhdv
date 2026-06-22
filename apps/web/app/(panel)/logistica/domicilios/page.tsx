@@ -27,11 +27,20 @@ interface PanelUser {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+// ¿La fecha de entrega es de mañana o después? (para marcar pedidos adelantados)
+function isFuture(d: string | null | undefined): boolean {
+  if (!d) return false;
+  const tomorrow = new Date();
+  tomorrow.setHours(0, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return new Date(d) >= tomorrow;
+}
 const field = 'rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
 
 export default function DomiciliosPage() {
   const router = useRouter();
-  const available = useApi<Order[]>('/routes/available');
+  const [includeUpcoming, setIncludeUpcoming] = useState(false);
+  const available = useApi<Order[]>(`/routes/available${includeUpcoming ? '?upcoming=true' : ''}`);
   const routes = useApi<DeliveryRoute[]>('/routes');
   const { data: users } = useApi<PanelUser[]>('/users');
 
@@ -111,11 +120,26 @@ export default function DomiciliosPage() {
   return (
     <div className="space-y-6">
       {/* Sugerencia automática por zona y capacidad */}
-      <SugerenciaRutas couriers={couriers} date={date} onCreated={refreshAll} />
+      <SugerenciaRutas
+        couriers={couriers}
+        date={date}
+        includeUpcoming={includeUpcoming}
+        onCreated={refreshAll}
+      />
 
       {/* Armar ruta manual */}
       <div className="rounded-xl bg-white p-5 ring-1 ring-neutral-200">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-700">Armar ruta manual</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-neutral-700">Armar ruta manual</h2>
+          <label className="flex items-center gap-2 text-xs text-neutral-500">
+            <input
+              type="checkbox"
+              checked={includeUpcoming}
+              onChange={(e) => setIncludeUpcoming(e.target.checked)}
+            />
+            Incluir próximos días (para adelantar)
+          </label>
+        </div>
         {available.data && available.data.length === 0 && (
           <p className="text-sm text-neutral-400">No hay pedidos listos para despachar.</p>
         )}
@@ -130,6 +154,11 @@ export default function DomiciliosPage() {
                 <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} />
                 <span className="font-medium">{o.code}</span>
                 <span className="text-neutral-500">{o.customer.name ?? o.customer.whatsappPhone}</span>
+                {isFuture(o.deliveryDate) && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    para {formatDate(o.deliveryDate)}
+                  </span>
+                )}
                 <span className="ml-auto truncate text-neutral-500">
                   {addr}
                   {o.deliveryZone ? ` · ${o.deliveryZone}` : ''}
@@ -223,13 +252,17 @@ export default function DomiciliosPage() {
 function SugerenciaRutas({
   couriers,
   date,
+  includeUpcoming,
   onCreated,
 }: {
   couriers: { id: string; name: string }[];
   date: string;
+  includeUpcoming: boolean;
   onCreated: () => void;
 }) {
-  const { data, loading, reload } = useApi<SuggestResponse>('/routes/suggest');
+  const { data, loading, reload } = useApi<SuggestResponse>(
+    `/routes/suggest${includeUpcoming ? '?upcoming=true' : ''}`,
+  );
   const [assign, setAssign] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 

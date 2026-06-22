@@ -315,6 +315,12 @@ function NuevoPedidoInner() {
               className={field}
             />
           </div>
+          <input
+            placeholder="CC o NIT (opcional · para la cuenta de cobro)"
+            value={taxId}
+            onChange={(e) => setTaxId(e.target.value)}
+            className={`mt-3 ${field}`}
+          />
           {customerFound === true && (
             <p className="mt-2 text-xs text-emerald-600">
               ✓ Cliente registrado{addresses.length > 0 ? ` · ${addresses.length} dirección(es)` : ''}
@@ -579,22 +585,17 @@ function NuevoPedidoInner() {
             <span className="font-medium text-neutral-700">🧾 Generar cuenta de cobro</span>
           </label>
           {generarCuenta && (
-            <div className="mb-3 rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200">
-              <label className="block text-sm">
-                <span className="mb-1 block text-neutral-600">
-                  CC o NIT del cliente <span className="text-red-500">*</span>
-                </span>
-                <input
-                  value={taxId}
-                  onChange={(e) => setTaxId(e.target.value)}
-                  placeholder="Ej: 890.982.479-6"
-                  className={field}
-                />
-              </label>
-              <p className="mt-2 text-xs text-neutral-500">
-                Al crear el pedido se abre la cuenta de cobro lista para imprimir. La dirección y el
-                teléfono salen del pedido y del cliente.
-              </p>
+            <div className="mb-3 rounded-lg bg-amber-50 p-3 text-xs ring-1 ring-amber-200">
+              {taxId.trim() ? (
+                <p className="text-neutral-600">
+                  Se usará el CC/NIT <span className="font-semibold">{taxId}</span> (el de la sección
+                  «1 · Cliente»). Al crear el pedido se abre la cuenta lista para imprimir.
+                </p>
+              ) : (
+                <p className="font-medium text-red-600">
+                  ⚠️ Falta el CC o NIT — escribilo arriba, en «1 · Cliente», para generar la cuenta.
+                </p>
+              )}
             </div>
           )}
           <div className="flex flex-wrap items-end justify-between gap-3">

@@ -46,3 +46,15 @@ export async function consumeFromBatches(
   }
   return qty - remaining;
 }
+
+/** Unidades vencidas (no vendibles) de una presentación: suma de los lotes ya vencidos. */
+export async function expiredStockQty(
+  tx: Prisma.TransactionClient,
+  productVariantId: string,
+): Promise<number> {
+  const batches = await tx.stockBatch.findMany({
+    where: { productVariantId, quantity: { gt: 0 }, expiresAt: { lte: new Date() } },
+    select: { quantity: true },
+  });
+  return batches.reduce((s, b) => s + b.quantity, 0);
+}
