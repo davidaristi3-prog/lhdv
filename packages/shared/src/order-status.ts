@@ -57,8 +57,10 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   CONFIRMED: ['IN_PRODUCTION', 'NEEDS_HUMAN', 'CANCELLED'],
   // CONFIRMED: devolver a cocina/confirmado (repone el inventario descontado al iniciar producción).
   IN_PRODUCTION: ['CONFIRMED', 'READY', 'NEEDS_HUMAN', 'CANCELLED'],
-  READY: ['OUT_FOR_DELIVERY', 'DELIVERED', 'NEEDS_HUMAN'],
-  OUT_FOR_DELIVERY: ['DELIVERED', 'NEEDS_HUMAN'],
+  READY: ['OUT_FOR_DELIVERY', 'DELIVERED', 'NEEDS_HUMAN', 'CANCELLED'],
+  // OUT_FOR_DELIVERY → READY: no se entregó y vuelve para re-enrutarse (reprogramar).
+  // → CANCELLED: no se entregó y se cierra (su producto puede ir al stock terminado).
+  OUT_FOR_DELIVERY: ['DELIVERED', 'READY', 'NEEDS_HUMAN', 'CANCELLED'],
   DELIVERED: [],
   CANCELLED: [],
   // Desde el escalamiento, una persona puede devolver el pedido al flujo

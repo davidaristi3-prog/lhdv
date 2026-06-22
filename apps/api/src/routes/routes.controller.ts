@@ -12,7 +12,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'node:path';
 import { UserRole } from '@prisma/client';
 import { RoutesService } from './routes.service';
-import { CreateRouteDto, DeliveredDto, LocationDto } from './dto/route.dto';
+import { AddOrdersDto, CreateRouteDto, DeliveredDto, LocationDto, ReturnOrderDto } from './dto/route.dto';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload } from '../auth/jwt-payload.interface';
@@ -37,7 +37,7 @@ export class RoutesController {
   @Roles(UserRole.OWNER, UserRole.DELIVERY)
   @Get('mine')
   mine(@CurrentUser() user: JwtPayload) {
-    return this.routes.myActiveRoute(user.sub);
+    return this.routes.myRoutes(user.sub);
   }
 
   @Roles(UserRole.OWNER)
@@ -64,6 +64,18 @@ export class RoutesController {
     return this.routes.reorder(id);
   }
 
+  @Roles(UserRole.OWNER)
+  @Post(':id/add')
+  addToRoute(@Param('id') id: string, @Body() dto: AddOrdersDto) {
+    return this.routes.addToRoute(id, dto.orderIds);
+  }
+
+  @Roles(UserRole.OWNER)
+  @Post(':id/orders/:orderId/remove')
+  removeFromRoute(@Param('id') id: string, @Param('orderId') orderId: string) {
+    return this.routes.removeFromRoute(id, orderId);
+  }
+
   @Roles(UserRole.OWNER, UserRole.DELIVERY)
   @Post(':id/start')
   start(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
@@ -84,6 +96,21 @@ export class RoutesController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.routes.markDelivered(orderId, { userId: user.sub, role: user.role, notes: dto.notes });
+  }
+
+  /** "No entregado": devuelve el pedido a la planta (al stock o reprogramar). */
+  @Roles(UserRole.OWNER, UserRole.DELIVERY)
+  @Post('orders/:orderId/return')
+  returnOrder(
+    @Param('orderId') orderId: string,
+    @Body() dto: ReturnOrderDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.routes.returnOrder(orderId, dto.mode, {
+      userId: user.sub,
+      role: user.role,
+      notes: dto.notes,
+    });
   }
 
   /** Marca entregado adjuntando la foto de evidencia (multipart, campo "photo"). */

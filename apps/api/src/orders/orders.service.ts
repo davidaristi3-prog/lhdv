@@ -425,8 +425,10 @@ export class OrdersService {
     if (items.length === 0) return false;
 
     const variantIds = [...new Set(items.map((i) => i.productVariantId))];
+    // Cubre con cualquier presentación que tenga existencias listas (por objetivo de
+    // stock o por una devolución de domicilio), no solo las gestionadas por par.
     const variants = await tx.productVariant.findMany({
-      where: { id: { in: variantIds }, parStock: { gt: 0 } },
+      where: { id: { in: variantIds }, readyStock: { gt: 0 } },
       select: { id: true, readyStock: true },
     });
     const available = new Map(variants.map((v) => [v.id, v.readyStock]));

@@ -32,8 +32,8 @@ const MOVE_LABEL: Record<FinishedMoveType, string> = {
 
 function estado(par: number, ready: number) {
   if (ready <= 0) return { dot: '🔴', label: 'Agotado', cls: 'text-red-600' };
-  if (ready < par) return { dot: '🟡', label: 'Bajo', cls: 'text-amber-700' };
-  return { dot: '🟢', label: 'OK', cls: 'text-emerald-700' };
+  if (par > 0 && ready < par) return { dot: '🟡', label: 'Bajo', cls: 'text-amber-700' };
+  return { dot: '🟢', label: par > 0 ? 'OK' : 'Disponible', cls: 'text-emerald-700' };
 }
 
 export default function ProductosListosPage() {
@@ -65,9 +65,11 @@ export default function ProductosListosPage() {
     await reloadAll();
   }
 
-  const enStock = (rows ?? []).filter((r) => r.parStock > 0);
-  const resto = (rows ?? []).filter((r) => r.parStock === 0);
-  const bajos = enStock.filter((r) => r.readyStock < r.parStock).length;
+  // En stock: los gestionados por objetivo (par>0) y los que tienen existencias por una
+  // devolución de domicilio (ready>0 aunque no tengan objetivo).
+  const enStock = (rows ?? []).filter((r) => r.parStock > 0 || r.readyStock > 0);
+  const resto = (rows ?? []).filter((r) => r.parStock === 0 && r.readyStock === 0);
+  const bajos = enStock.filter((r) => r.parStock > 0 && r.readyStock < r.parStock).length;
 
   return (
     <div className="space-y-6">
@@ -117,7 +119,7 @@ export default function ProductosListosPage() {
                       </td>
                       <td className="px-4 py-2 text-right">
                         <button onClick={() => setPar(r)} className="hover:underline" title="Editar objetivo">
-                          {r.parStock}
+                          {r.parStock || '—'}
                         </button>
                       </td>
                       <td className={`px-4 py-2 text-right text-base font-semibold ${e.cls}`}>{r.readyStock}</td>

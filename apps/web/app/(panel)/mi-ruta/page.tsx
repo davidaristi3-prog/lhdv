@@ -3,22 +3,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, API_BASE, getToken } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { formatDate } from '@/lib/labels';
 import type { DeliveryRoute, Order } from '@/lib/types';
 
 export default function MiRutaPage() {
-  const { data: route, loading, error, reload } = useApi<DeliveryRoute>('/routes/mine');
+  const { data: routes, loading, error, reload } = useApi<DeliveryRoute[]>('/routes/mine');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [returnFor, setReturnFor] = useState<string | null>(null);
   const lastPost = useRef(0);
 
-  // Reporte de ubicación en vivo mientras la ruta está en curso.
+  const activa = (routes ?? []).find((r) => r.status === 'IN_PROGRESS') ?? null;
+  const porEmpezar = (routes ?? []).filter((r) => r.status === 'DRAFT');
+
+  // Reporte de ubicación en vivo mientras hay una ruta en curso.
   useEffect(() => {
-    if (!route || route.status !== 'IN_PROGRESS' || !navigator.geolocation) return;
+    if (!activa || !navigator.geolocation) return;
     const watch = navigator.geolocation.watchPosition(
       (pos) => {
         const now = Date.now();
-        if (now - lastPost.current < 10000) return; // máx. 1 reporte / 10s
+        if (now - lastPost.current < 10000) return;
         lastPost.current = now;
-        void api(`/routes/${route.id}/location`, {
+        void api(`/routes/${activa.id}/location`, {
           method: 'POST',
           body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         }).catch(() => {});
@@ -27,14 +32,15 @@ export default function MiRutaPage() {
       { enableHighAccuracy: true, maximumAge: 10000 },
     );
     return () => navigator.geolocation.clearWatch(watch);
-  }, [route?.id, route?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activa?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function start() {
-    if (!route) return;
-    setBusyId('start');
+  async function start(routeId: string) {
+    setBusyId('start-' + routeId);
     try {
-      await api(`/routes/${route.id}/start`, { method: 'POST' });
+      await api(`/routes/${routeId}/start`, { method: 'POST' });
       await reload();
+    } catch (e) {
+      alert((e as Error).message);
     } finally {
       setBusyId(null);
     }
@@ -63,33 +69,74 @@ export default function MiRutaPage() {
     }
   }
 
+  async function noEntregado(order: Order, mode: 'stock' | 'reschedule') {
+    setBusyId(order.id);
+    try {
+      await api(`/routes/orders/${order.id}/return`, { method: 'POST', body: JSON.stringify({ mode }) });
+      setReturnFor(null);
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (loading) return <p className="text-neutral-500">Cargando…</p>;
   if (error) return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>;
-  if (!route) {
+  if (!routes || routes.length === 0) {
     return (
-      <div className="rounded-xl bg-white p-8 text-center text-neutral-500 ring-1 ring-neutral-200">
-        No tenés una ruta asignada por ahora.
+      <div className="mx-auto max-w-lg rounded-xl bg-white p-8 text-center text-neutral-500 ring-1 ring-neutral-200">
+        No tenés rutas asignadas por ahora.
       </div>
     );
   }
 
+  // Sin ruta en curso: elegir cuál empezar.
+  if (!activa) {
+    return (
+      <div className="mx-auto max-w-lg space-y-4">
+        <h1 className="text-lg font-semibold">Mis rutas</h1>
+        <p className="text-sm text-neutral-500">
+          Tenés {porEmpezar.length} ruta(s) asignada(s). Elegí cuál empezar.
+        </p>
+        <div className="space-y-3">
+          {porEmpezar.map((r) => (
+            <div key={r.id} className="flex items-center justify-between rounded-xl bg-white p-4 ring-1 ring-neutral-200">
+              <div>
+                <p className="font-medium">{formatDate(r.date)}</p>
+                <p className="text-sm text-neutral-500">{r.orders.length} paradas</p>
+              </div>
+              <button
+                onClick={() => start(r.id)}
+                disabled={busyId === 'start-' + r.id}
+                className="rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+              >
+                {busyId === 'start-' + r.id ? 'Iniciando…' : 'Empezar'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Ruta en curso: las paradas.
+  const route = activa;
   const pending = route.orders.filter((o) => o.status !== 'DELIVERED').length;
+  const actionBtn =
+    'rounded-lg border border-neutral-300 py-2 text-center text-sm font-medium hover:bg-neutral-50';
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Mi ruta</h1>
+        <h1 className="text-lg font-semibold">Mi ruta · {formatDate(route.date)}</h1>
         <span className="text-sm text-neutral-500">{pending} pendientes</span>
       </div>
-
-      {route.status === 'DRAFT' && (
-        <button
-          onClick={start}
-          disabled={busyId === 'start'}
-          className="w-full rounded-xl bg-neutral-900 py-3 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-        >
-          {busyId === 'start' ? 'Iniciando…' : 'Iniciar ruta'}
-        </button>
+      {porEmpezar.length > 0 && (
+        <p className="rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-500">
+          Tenés {porEmpezar.length} ruta(s) más en espera. Terminá esta para empezar otra.
+        </p>
       )}
 
       <div className="space-y-3">
@@ -101,15 +148,11 @@ export default function MiRutaPage() {
           const lat = o.customerAddress?.lat;
           const lng = o.customerAddress?.lng;
           const ll = lat != null && lng != null ? `${lat},${lng}` : null;
-          // Destinos de navegación: usa coordenadas si la dirección está geocodificada.
           const mapsHref = `https://www.google.com/maps/dir/?api=1&destination=${ll ?? encodeURIComponent(addr)}`;
           const wazeHref = ll
             ? `https://waze.com/ul?ll=${ll}&navigate=yes`
             : `https://waze.com/ul?q=${encodeURIComponent(addr)}&navigate=yes`;
-          // geo: → en Android despliega el selector de apps de mapas instaladas.
           const geoHref = ll ? `geo:${ll}?q=${ll}` : `geo:0,0?q=${encodeURIComponent(addr)}`;
-          const actionBtn =
-            'rounded-lg border border-neutral-300 py-2 text-center text-sm font-medium hover:bg-neutral-50';
           return (
             <div
               key={o.id}
@@ -133,7 +176,6 @@ export default function MiRutaPage() {
 
               {!done && (
                 <div className="mt-3 space-y-2">
-                  {/* Navegación: cada quien abre la app que tenga */}
                   <div className="grid grid-cols-3 gap-2">
                     <a href={mapsHref} target="_blank" rel="noreferrer" className={actionBtn}>
                       Maps
@@ -145,7 +187,6 @@ export default function MiRutaPage() {
                       Otra app
                     </a>
                   </div>
-                  {/* Contacto */}
                   <div className="grid grid-cols-2 gap-2">
                     <a href={`tel:${phone}`} className={actionBtn}>
                       Llamar
@@ -154,7 +195,6 @@ export default function MiRutaPage() {
                       WhatsApp
                     </a>
                   </div>
-                  {/* Entrega */}
                   <div className="grid grid-cols-3 gap-2">
                     <label className="col-span-2 cursor-pointer rounded-lg bg-neutral-900 py-2 text-center text-sm font-medium text-white hover:bg-neutral-800">
                       {busyId === o.id ? 'Subiendo…' : '📷 Entregar con foto'}
@@ -178,6 +218,40 @@ export default function MiRutaPage() {
                       Sin foto
                     </button>
                   </div>
+
+                  {/* No entregado: devolver a la planta (al stock o reprogramar) */}
+                  {returnFor === o.id ? (
+                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-amber-50 p-2">
+                      <p className="col-span-2 text-xs text-amber-800">¿Qué hago con este pedido?</p>
+                      <button
+                        onClick={() => noEntregado(o, 'stock')}
+                        disabled={busyId === o.id}
+                        className="rounded-lg bg-amber-600 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                      >
+                        📦 Al stock
+                      </button>
+                      <button
+                        onClick={() => noEntregado(o, 'reschedule')}
+                        disabled={busyId === o.id}
+                        className="rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        🔄 Reprogramar
+                      </button>
+                      <button
+                        onClick={() => setReturnFor(null)}
+                        className="col-span-2 text-xs text-neutral-500 hover:underline"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setReturnFor(o.id)}
+                      className="w-full rounded-lg border border-neutral-200 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50"
+                    >
+                      No se entregó…
+                    </button>
+                  )}
                 </div>
               )}
             </div>

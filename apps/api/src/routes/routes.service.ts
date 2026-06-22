@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -177,10 +177,11 @@ export class RoutesService {
     return route;
   }
 
-  myActiveRoute(userId: string) {
-    return this.prisma.deliveryRoute.findFirst({
+  /** Todas las rutas sin terminar del domiciliario, para que elija cuál hacer. */
+  myRoutes(userId: string) {
+    return this.prisma.deliveryRoute.findMany({
       where: { courierId: userId, status: { in: ['DRAFT', 'IN_PROGRESS'] } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { date: 'asc' },
       include: routeInclude,
     });
   }
@@ -240,6 +241,14 @@ export class RoutesService {
 
   async start(id: string, userId: string, role: UserRole) {
     const route = await this.get(id);
+    // Una ruta en curso a la vez: si el domiciliario ya tiene otra IN_PROGRESS, debe terminarla primero.
+    if (route.courierId) {
+      const otra = await this.prisma.deliveryRoute.findFirst({
+        where: { courierId: route.courierId, status: 'IN_PROGRESS', id: { not: id } },
+        select: { id: true },
+      });
+      if (otra) throw new BadRequestException('Ya tenés una ruta en curso. Terminala antes de empezar otra.');
+    }
     await this.prisma.deliveryRoute.update({ where: { id }, data: { status: 'IN_PROGRESS' } });
     for (const o of route.orders) {
       if (o.status === 'READY') {
@@ -300,14 +309,7 @@ export class RoutesService {
       },
     });
 
-    if (order.routeId) {
-      const pending = await this.prisma.order.count({
-        where: { routeId: order.routeId, status: { not: 'DELIVERED' } },
-      });
-      if (pending === 0) {
-        await this.prisma.deliveryRoute.update({ where: { id: order.routeId }, data: { status: 'DONE' } });
-      }
-    }
+    if (order.routeId) await this.closeRouteIfDone(order.routeId);
     return updated;
   }
 
@@ -316,5 +318,130 @@ export class RoutesService {
       where: { id },
       data: { courierLat: lat, courierLng: lng, courierAt: new Date() },
     });
+  }
+
+  // ─── Edición de ruta (solo antes de salir) ──────────────────
+
+  private async assertEditable(routeId: string) {
+    const route = await this.prisma.deliveryRoute.findUnique({
+      where: { id: routeId },
+      select: { status: true },
+    });
+    if (!route) throw new NotFoundException('Ruta no encontrada');
+    if (route.status !== 'DRAFT') {
+      throw new BadRequestException('Solo se puede editar una ruta que todavía no salió de la planta');
+    }
+  }
+
+  /** Saca un pedido de una ruta que aún no salió: vuelve a "disponibles" y se reordena. */
+  async removeFromRoute(routeId: string, orderId: string) {
+    await this.assertEditable(routeId);
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { routeId: true },
+    });
+    if (!order || order.routeId !== routeId) {
+      throw new BadRequestException('El pedido no está en esta ruta');
+    }
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { routeId: null, routeSeq: null },
+    });
+    return this.reorder(routeId);
+  }
+
+  /** Añade pedidos disponibles a una ruta que aún no salió y la reordena. */
+  async addToRoute(routeId: string, orderIds: string[]) {
+    await this.assertEditable(routeId);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        id: { in: orderIds },
+        routeId: null,
+        deliveryType: { not: 'PICKUP' },
+        status: { in: ROUTABLE },
+      },
+      include: { customerAddress: true },
+    });
+    if (orders.length === 0) {
+      throw new BadRequestException('Ninguno de los pedidos está disponible para añadir');
+    }
+    let networkCalls = 0;
+    for (const o of orders) {
+      // Geocodifica si la dirección no tiene coordenadas (para ubicarla en el orden).
+      if (o.customerAddressId && (o.customerAddress?.lat == null || o.customerAddress?.lng == null)) {
+        if (networkCalls > 0) await this.sleep(1100);
+        networkCalls += 1;
+        await this.geocoding.geocodeAddress(o.customerAddressId);
+      }
+      await this.prisma.order.update({ where: { id: o.id }, data: { routeId } });
+    }
+    return this.reorder(routeId);
+  }
+
+  /**
+   * "No entregado": el domiciliario devuelve el pedido a la planta.
+   *  - mode 'stock': se cierra (CANCELLED) y sus productos entran al stock terminado
+   *    (los renglones que habían salido de stock se reponen al cancelar; los producidos
+   *    se suman como productos físicos que volvieron).
+   *  - mode 'reschedule': vuelve a "listo" para re-enrutarlo (mismo cliente, otro día).
+   */
+  async returnOrder(
+    orderId: string,
+    mode: 'stock' | 'reschedule',
+    opts: { userId: string; role: UserRole; notes?: string },
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: { select: { quantity: true, productVariantId: true, fromStock: true } } },
+    });
+    if (!order) throw new NotFoundException('Pedido no encontrado');
+    const routeId = order.routeId;
+
+    if (mode === 'stock') {
+      await this.orders.applyTransition(orderId, 'CANCELLED', {
+        byUserId: opts.userId,
+        actingRole: opts.role,
+        reason: opts.notes ?? 'No entregado — devuelto al stock',
+      });
+      for (const it of order.items.filter((i) => !i.fromStock)) {
+        await this.prisma.productVariant.update({
+          where: { id: it.productVariantId },
+          data: { readyStock: { increment: it.quantity } },
+        });
+        await this.prisma.finishedStockMovement.create({
+          data: {
+            productVariantId: it.productVariantId,
+            type: 'RETURN',
+            quantity: it.quantity,
+            orderId,
+            reason: 'Devuelto de domicilio (no entregado)',
+          },
+        });
+      }
+    } else {
+      await this.orders.applyTransition(orderId, 'READY', {
+        byUserId: opts.userId,
+        actingRole: opts.role,
+        reason: opts.notes ?? 'No entregado — reprogramado',
+      });
+    }
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { routeId: null, routeSeq: null },
+    });
+    if (routeId) await this.closeRouteIfDone(routeId);
+    return this.prisma.order.findUnique({ where: { id: orderId } });
+  }
+
+  /** Si en la ruta ya no quedan pedidos pendientes (entregados o devueltos), la cierra. */
+  private async closeRouteIfDone(routeId: string) {
+    const total = await this.prisma.order.count({ where: { routeId } });
+    const pending = await this.prisma.order.count({
+      where: { routeId, status: { notIn: ['DELIVERED', 'CANCELLED'] } },
+    });
+    if (total > 0 && pending === 0) {
+      await this.prisma.deliveryRoute.update({ where: { id: routeId }, data: { status: 'DONE' } });
+    }
   }
 }

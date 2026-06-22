@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { api, API_ORIGIN } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { formatDateTime } from '@/lib/labels';
-import type { DeliveryRoute } from '@/lib/types';
+import type { DeliveryRoute, Order } from '@/lib/types';
 import type { MapStop } from '@/app/components/DeliveryMap';
 
 const DeliveryMap = dynamic(
@@ -18,7 +18,9 @@ const DeliveryMap = dynamic(
 export default function RutaDetallePage() {
   const params = useParams<{ id: string }>();
   const { data: route, loading, error, reload } = useApi<DeliveryRoute>(`/routes/${params.id}`);
+  const available = useApi<Order[]>('/routes/available');
   const [busy, setBusy] = useState(false);
+  const [toAdd, setToAdd] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const t = setInterval(() => void reload(), 12000); // ubicación en vivo
@@ -30,6 +32,39 @@ export default function RutaDetallePage() {
     try {
       await api(path, { method: 'POST' });
       await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Sacar un pedido de la ruta (vuelve a disponibles) — solo antes de salir.
+  async function removeOrder(orderId: string) {
+    setBusy(true);
+    try {
+      await api(`/routes/${params.id}/orders/${orderId}/remove`, { method: 'POST' });
+      await reload();
+      await available.reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Añadir pedidos disponibles a esta ruta — solo antes de salir.
+  async function addOrders() {
+    if (toAdd.size === 0) return;
+    setBusy(true);
+    try {
+      await api(`/routes/${params.id}/add`, {
+        method: 'POST',
+        body: JSON.stringify({ orderIds: [...toAdd] }),
+      });
+      setToAdd(new Set());
+      await reload();
+      await available.reload();
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -145,10 +180,61 @@ export default function RutaDetallePage() {
                   foto
                 </a>
               )}
+              {route.status === 'DRAFT' && o.status !== 'DELIVERED' && (
+                <button
+                  onClick={() => removeOrder(o.id)}
+                  disabled={busy}
+                  className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  title="Sacar de la ruta (vuelve a disponibles)"
+                >
+                  Sacar
+                </button>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Añadir pedidos de último minuto — solo mientras la ruta no salió. */}
+      {route.status === 'DRAFT' && available.data && available.data.length > 0 && (
+        <div className="rounded-xl bg-white p-4 ring-1 ring-neutral-200">
+          <h2 className="mb-2 text-sm font-semibold text-neutral-700">Añadir pedido a esta ruta</h2>
+          <div className="space-y-2">
+            {available.data.map((o) => (
+              <label
+                key={o.id}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-neutral-200 p-2 text-sm hover:bg-neutral-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={toAdd.has(o.id)}
+                  onChange={() =>
+                    setToAdd((prev) => {
+                      const n = new Set(prev);
+                      if (n.has(o.id)) n.delete(o.id);
+                      else n.add(o.id);
+                      return n;
+                    })
+                  }
+                />
+                <span className="font-medium">{o.code}</span>
+                <span className="text-neutral-500">{o.customer.name ?? o.customer.whatsappPhone}</span>
+                <span className="ml-auto truncate text-neutral-500">
+                  {o.customerAddress?.address ?? o.deliveryAddress ?? '—'}
+                  {o.deliveryZone ? ` · ${o.deliveryZone}` : ''}
+                </span>
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={addOrders}
+            disabled={busy || toAdd.size === 0}
+            className="mt-3 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+          >
+            {busy ? 'Añadiendo…' : `Añadir (${toAdd.size})`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
