@@ -373,13 +373,14 @@ function NuevoPedidoInner() {
                       placeholder="Nueva dirección"
                       value={deliveryAddress}
                       onChange={(e) => setDeliveryAddress(e.target.value)}
-                      onBlur={() => autodetectZone(deliveryAddress)}
+                      onBlur={() => autodetectZone(`${deliveryAddress} ${addressLabel}`)}
                       className={`col-span-2 ${field}`}
                     />
                     <input
-                      placeholder="Etiqueta (Casa, Trabajo…)"
+                      placeholder="Etiqueta (Casa, Trabajo… o la ciudad)"
                       value={addressLabel}
                       onChange={(e) => setAddressLabel(e.target.value)}
+                      onBlur={() => autodetectZone(`${deliveryAddress} ${addressLabel}`)}
                       className={field}
                     />
                     <label className="flex items-center gap-2 text-sm text-neutral-600">
