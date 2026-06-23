@@ -39,6 +39,7 @@ const NAV: NavEntry[] = [
       { href: '/cuentas-cobro', label: 'Cuentas de cobro', roles: ['OWNER', 'SALES'] },
       { href: '/zonas', label: 'Zonas', roles: ['OWNER'] },
       { href: '/equipo', label: 'Equipo', roles: ['OWNER'] },
+      { href: '/bot-prueba', label: '🤖 Bot (prueba)', roles: ['OWNER'] },
     ],
   },
 ];

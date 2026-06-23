@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -10,12 +11,32 @@ import {
   type RawBodyRequest,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { UserRole } from '@prisma/client';
 import { WhatsappService } from './whatsapp.service';
+import { WhatsappOrchestratorService } from './whatsapp-orchestrator.service';
 import { Public } from '../auth/public.decorator';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('whatsapp')
 export class WhatsappController {
-  constructor(private readonly whatsapp: WhatsappService) {}
+  constructor(
+    private readonly whatsapp: WhatsappService,
+    private readonly orchestrator: WhatsappOrchestratorService,
+  ) {}
+
+  /** Simulador del bot: probar la conversación desde el panel, sin WhatsApp real. */
+  @Roles(UserRole.OWNER)
+  @Post('simulate')
+  simulate(@Body() body: { sessionId: string; phone?: string; text: string }) {
+    return this.orchestrator.simulate(body.sessionId, body.phone?.trim() || '+99990SIMULADOR', body.text);
+  }
+
+  @Roles(UserRole.OWNER)
+  @Post('simulate/reset')
+  resetSimulate(@Body() body: { sessionId: string }) {
+    this.orchestrator.resetSession(body.sessionId);
+    return { ok: true };
+  }
 
   /** Verificación del webhook (Meta hace un GET al configurarlo). */
   @Public()
