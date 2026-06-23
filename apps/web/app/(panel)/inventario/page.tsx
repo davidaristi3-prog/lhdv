@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { formatCop } from '@lhdv/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -17,13 +18,6 @@ export default function InventarioPage() {
   const { data: ingredients, loading, error, reload } = useApi<Ingredient[]>('/ingredients?all=true');
   const movements = useApi<InventoryMovement[]>('/ingredients/movements');
 
-  async function purchase(i: Ingredient) {
-    const v = prompt(`¿Cuánto entra de ${i.name}? (en ${i.unit})`);
-    if (!v) return;
-    await api(`/ingredients/${i.id}/purchase`, { method: 'POST', body: JSON.stringify({ quantity: Number(v) }) });
-    await reload();
-    await movements.reload();
-  }
   async function adjust(i: Ingredient) {
     const v = prompt(`Stock real de ${i.name} (en ${i.unit}):`, String(round(i.stockQty)));
     if (v == null) return;
@@ -50,8 +44,10 @@ export default function InventarioPage() {
         <div>
           <h1 className="text-lg font-semibold">Inventario de materias primas</h1>
           <p className="text-sm text-neutral-500">
-            El stock baja solo cuando un pedido entra a producción, según la receta de cada producto. Registrá tus
-            compras y ajustes acá.
+            El stock baja solo cuando un pedido entra a producción, según la receta de cada producto.
+            Con <span className="font-medium">Comprar</span> registrás una entrada (se hace en Gastos, con
+            proveedor y precio, y actualiza el costo); con <span className="font-medium">Ajustar</span> fijás un
+            conteo real.
           </p>
         </div>
         <div className="text-right">
@@ -101,12 +97,12 @@ export default function InventarioPage() {
                     <td className="px-4 py-2 text-right text-neutral-500">{formatCop(Math.round(i.costPerUnitCop))}</td>
                     <td className="px-4 py-2 text-right">{formatCop(Math.round(i.stockQty * i.costPerUnitCop))}</td>
                     <td className="px-4 py-2 text-right">
-                      <button
-                        onClick={() => purchase(i)}
+                      <Link
+                        href={`/contabilidad/gastos?insumo=${i.id}`}
                         className="rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-800"
                       >
                         Comprar
-                      </button>
+                      </Link>
                       <button
                         onClick={() => adjust(i)}
                         className="ml-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium hover:bg-neutral-100"

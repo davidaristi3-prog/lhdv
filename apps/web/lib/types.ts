@@ -143,6 +143,20 @@ export type ExpenseCategory =
   | 'FEES'
   | 'OTHER';
 
+export interface SupplierLite {
+  id: string;
+  name: string;
+}
+
+export interface ExpenseLine {
+  id: string;
+  ingredientId: string;
+  packLabel: string | null;
+  qtyBase: number;
+  lineCop: number;
+  ingredient?: { name: string; unit: string };
+}
+
 export interface Expense {
   id: string;
   date: string;
@@ -150,6 +164,9 @@ export interface Expense {
   description: string;
   amountCop: number;
   notes: string | null;
+  invoiceNo?: string | null;
+  supplier?: SupplierLite | null;
+  lines?: ExpenseLine[]; // si trae renglones, es una compra de insumos
 }
 
 export interface Ingredient {
@@ -192,6 +209,8 @@ export interface Summary {
   ticketPromedioCop: number;
   cogsCop: number;
   gastosCop: number;
+  comprasInsumosCop: number; // plata que salió en insumos (no resta utilidad)
+  valorInventarioCop: number; // valor del inventario en bodega
   utilidadBrutaCop: number;
   utilidadNetaCop: number;
   margenBrutoPct: number;

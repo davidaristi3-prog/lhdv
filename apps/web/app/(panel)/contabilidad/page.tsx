@@ -55,7 +55,19 @@ export default function ResumenPage() {
         <Kpi label="Margen bruto" value={`${s?.margenBrutoPct ?? 0}%`} />
         <Kpi label="Ventas" value={String(s?.ventas ?? 0)} />
         <Kpi label="COGS (insumos)" value={formatCop(s?.cogsCop ?? 0)} />
-        <Kpi label="Gastos" value={formatCop(s?.gastosCop ?? 0)} />
+        <Kpi label="Gastos operativos" value={formatCop(s?.gastosCop ?? 0)} />
+      </div>
+
+      {/* Datos informativos: no entran en la utilidad (la compra de insumos es inventario,
+          su costo pega vía COGS al vender). */}
+      <div>
+        <p className="mb-1.5 text-xs text-neutral-400">
+          Informativo · flujo de caja e inventario (no afecta la utilidad)
+        </p>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Kpi label="Compras de insumos" value={formatCop(s?.comprasInsumosCop ?? 0)} />
+          <Kpi label="Valor del inventario" value={formatCop(s?.valorInventarioCop ?? 0)} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

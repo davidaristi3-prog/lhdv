@@ -16,6 +16,11 @@ export class ExpensesController {
     return this.expenses.list(from, to);
   }
 
+  @Get('suppliers')
+  suppliers() {
+    return this.expenses.suppliers();
+  }
+
   @Post()
   create(@Body() dto: CreateExpenseDto, @CurrentUser() user: JwtPayload) {
     return this.expenses.create(dto, user.sub);
@@ -27,7 +32,7 @@ export class ExpensesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.expenses.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.expenses.remove(id, user.sub);
   }
 }

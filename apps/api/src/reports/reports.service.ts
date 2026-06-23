@@ -26,13 +26,26 @@ export class ReportsService {
 
   /** Resumen de rentabilidad del período (base: fecha de creación del pedido). */
   async summary(from?: string, to?: string) {
-    const [orders, costByVariant, expenses] = await Promise.all([
+    const period = dateRange(from, to);
+    const [orders, costByVariant, gastos, comprasInsumos, ingredients] = await Promise.all([
       this.prisma.order.findMany({
         where: this.saleWhere(from, to),
         select: { totalCop: true, items: { select: { productVariantId: true, quantity: true } } },
       }),
       this.ingredients.costByVariant(),
-      this.prisma.expense.aggregate({ _sum: { amountCop: true }, where: { date: dateRange(from, to) } }),
+      // Gastos operativos: sin renglones de insumos y sin la categoría INGREDIENTS (legacy).
+      // Comprar insumos NO es gasto del P&L: su costo entra vía COGS al vender (evita el
+      // doble conteo que había antes).
+      this.prisma.expense.aggregate({
+        _sum: { amountCop: true },
+        where: { date: period, lines: { none: {} }, category: { not: 'INGREDIENTS' } },
+      }),
+      // Compras de insumos del período: dato de flujo de caja, FUERA de la utilidad.
+      this.prisma.expense.aggregate({
+        _sum: { amountCop: true },
+        where: { date: period, lines: { some: {} } },
+      }),
+      this.prisma.ingredient.findMany({ select: { stockQty: true, costPerUnitCop: true } }),
     ]);
 
     const ingresosCop = orders.reduce((s, o) => s + o.totalCop, 0);
@@ -45,7 +58,11 @@ export class ReportsService {
       }
     }
     const cogsCop = Math.round(cogs);
-    const gastosCop = expenses._sum.amountCop ?? 0;
+    const gastosCop = gastos._sum.amountCop ?? 0;
+    const comprasInsumosCop = comprasInsumos._sum.amountCop ?? 0;
+    const valorInventarioCop = Math.round(
+      ingredients.reduce((s, i) => s + i.stockQty * i.costPerUnitCop, 0),
+    );
     const utilidadBrutaCop = ingresosCop - cogsCop;
     const utilidadNetaCop = utilidadBrutaCop - gastosCop;
 
@@ -55,6 +72,8 @@ export class ReportsService {
       ticketPromedioCop: ventas ? Math.round(ingresosCop / ventas) : 0,
       cogsCop,
       gastosCop,
+      comprasInsumosCop, // informativo: plata que salió en insumos (no resta utilidad)
+      valorInventarioCop, // informativo: valor del inventario en bodega
       utilidadBrutaCop,
       utilidadNetaCop,
       margenBrutoPct: ingresosCop ? Math.round((utilidadBrutaCop / ingresosCop) * 100) : 0,
@@ -137,7 +156,8 @@ export class ReportsService {
     const grouped = await this.prisma.expense.groupBy({
       by: ['category'],
       _sum: { amountCop: true },
-      where: { date: dateRange(from, to) },
+      // Solo gastos operativos: excluye compras de insumos (renglones) y la categoría legacy.
+      where: { date: dateRange(from, to), lines: { none: {} }, category: { not: 'INGREDIENTS' } },
     });
     return grouped
       .map((g) => ({ category: g.category, totalCop: g._sum.amountCop ?? 0 }))

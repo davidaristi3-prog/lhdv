@@ -377,6 +377,9 @@ enum ExpenseCategory {
   OTHER
 }
 
+// Un gasto o compra. Si trae `lines` (renglones de insumos) es una COMPRA: mueve
+// inventario y recalcula el costo de los insumos, y NO se cuenta como gasto del
+// P&L (su costo entra vía COGS al vender). Sin renglones es un gasto normal.
 model Expense {
   id          String          @id @default(cuid())
   date        DateTime        @db.Date
@@ -384,13 +387,47 @@ model Expense {
   description String
   amountCop   Int
   notes       String?
+  invoiceNo   String? // N° de factura del proveedor (opcional)
+  supplierId  String? // proveedor (opcional; las compras informales no tienen)
   createdById String?
   createdAt   DateTime        @default(now())
 
-  createdBy User? @relation(fields: [createdById], references: [id])
+  createdBy User?         @relation(fields: [createdById], references: [id])
+  supplier  Supplier?     @relation(fields: [supplierId], references: [id])
+  lines     ExpenseLine[]
 
   @@index([date])
   @@index([category])
+  @@index([supplierId])
+}
+
+// Directorio simple de proveedores. Se crea al vuelo desde el formulario de compra.
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  phone     String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  expenses Expense[]
+}
+
+// Renglón de insumo de una compra: dispara el movimiento de inventario y el
+// recálculo de costo (promedio ponderado) del insumo correspondiente.
+model ExpenseLine {
+  id           String  @id @default(cuid())
+  expenseId    String
+  ingredientId String
+  packLabel    String? // presentación informativa, ej. "2 Kilos"
+  qtyBase      Float // cantidad ya convertida a la unidad base del insumo (g/ml/unidad)
+  lineCop      Int // lo que costó este renglón (total)
+
+  expense    Expense    @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@index([expenseId])
+  @@index([ingredientId])
 }
 
 model Ingredient {
@@ -402,8 +439,9 @@ model Ingredient {
   lowStockQty    Float? // umbral de alerta de stock bajo
   active         Boolean @default(true)
 
-  recipeItems RecipeItem[]
-  movements   InventoryMovement[]
+  recipeItems  RecipeItem[]
+  movements    InventoryMovement[]
+  expenseLines ExpenseLine[]
 }
 
 // Receta de una presentación: cuánto de cada insumo lleva → permite el costeo.
@@ -499,6 +537,7 @@ model InventoryMovement {
   quantity     Float // siempre positivo; el type da el signo (PURCHASE suma, CONSUMPTION resta)
   reason       String?
   orderId      String? // si vino del consumo de producción de un pedido
+  expenseLineId String? // si vino de un renglón de compra (Expense con renglones)
   createdById  String?
   createdAt    DateTime          @default(now())
 
