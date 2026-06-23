@@ -49,16 +49,20 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
 
-  // Cierra el desplegable al cambiar de página.
-  useEffect(() => setOpenMenu(null), [pathname]);
+  // Cierra menús al cambiar de página.
+  useEffect(() => {
+    setOpenMenu(null);
+    setMobileOpen(false);
+  }, [pathname]);
 
-  // Cierra el desplegable al hacer clic fuera de la barra.
+  // Cierra el desplegable desktop al hacer clic fuera de la barra.
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (navRef.current && !navRef.current.contains(e.target as Node)) setOpenMenu(null);
@@ -72,7 +76,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   }
 
   const role = user.role;
-  // Links visibles por rol; un grupo se muestra si tiene al menos un hijo visible.
   const entries = NAV.filter((n) =>
     isGroup(n) ? n.children.some((c) => c.roles.includes(role)) : n.roles.includes(role),
   );
@@ -82,13 +85,19 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
       active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'
     }`;
 
+  const mobileLinkClass = (active: boolean) =>
+    `block rounded-lg px-3 py-2.5 text-sm font-medium ${
+      active ? 'bg-neutral-900 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+    }`;
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-6">
           <div className="flex items-center gap-6">
             <span className="font-semibold">🦌 La Hora del Venado</span>
-            <nav ref={navRef} className="flex gap-1">
+            {/* Nav desktop */}
+            <nav ref={navRef} className="hidden gap-1 md:flex">
               {entries.map((n) => {
                 if (!isGroup(n)) {
                   return (
@@ -131,24 +140,84 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
               })}
             </nav>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+
+          <div className="flex items-center gap-2 text-sm">
+            {/* Usuario + salir — solo desktop */}
             <Link
               href="/cuenta"
-              className="rounded-lg px-2 py-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
+              className="hidden rounded-lg px-2 py-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 md:block"
               title="Mi cuenta"
             >
               {user.name} · {ROLE_LABEL[user.role]}
             </Link>
             <button
               onClick={logout}
-              className="rounded-lg px-3 py-1.5 font-medium text-neutral-600 hover:bg-neutral-100"
+              className="hidden rounded-lg px-3 py-1.5 font-medium text-neutral-600 hover:bg-neutral-100 md:block"
             >
               Salir
             </button>
+
+            {/* Botón hamburguesa — solo mobile */}
+            <button
+              onClick={() => setMobileOpen((v) => !v)}
+              className="rounded-lg p-2 text-neutral-600 hover:bg-neutral-100 md:hidden"
+              aria-label="Menú"
+            >
+              {mobileOpen ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Menú móvil desplegable */}
+        {mobileOpen && (
+          <div className="border-t border-neutral-100 px-4 pb-4 pt-2 md:hidden">
+            <div className="space-y-0.5">
+              {entries.map((n) => {
+                if (!isGroup(n)) {
+                  return (
+                    <Link key={n.href} href={n.href} className={mobileLinkClass(pathname.startsWith(n.href))}>
+                      {n.label}
+                    </Link>
+                  );
+                }
+                const children = n.children.filter((c) => c.roles.includes(role));
+                return (
+                  <div key={n.label}>
+                    <p className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                      {n.label}
+                    </p>
+                    {children.map((c) => (
+                      <Link key={c.href} href={c.href} className={mobileLinkClass(pathname.startsWith(c.href))}>
+                        {c.label}
+                      </Link>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 border-t border-neutral-100 pt-3">
+              <p className="px-3 pb-2 text-xs text-neutral-400">
+                {user.name} · {ROLE_LABEL[user.role]}
+              </p>
+              <button
+                onClick={logout}
+                className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-600 hover:bg-neutral-100"
+              >
+                Salir
+              </button>
+            </div>
+          </div>
+        )}
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6 md:px-6">{children}</main>
     </div>
   );
 }
