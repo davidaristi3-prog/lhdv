@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { RecurringExpense } from '@prisma/client';
+import { Prisma, RecurringExpense } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CauseBatchDto,
@@ -13,6 +13,16 @@ function monthRange(d: Date) {
   const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
   const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
   return { start, end };
+}
+
+/** Clave 'YYYY-MM' (UTC) del mes de una fecha — alimenta el candado anti-duplicado. */
+function monthKey(d: Date) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** El índice único (recurringId, causedMonth) saltó: ya se causó ese mes. */
+function isDuplicateMonth(e: unknown) {
+  return e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
 }
 
 @Injectable()
@@ -86,7 +96,13 @@ export class RecurringExpensesService {
     if (await this.alreadyCaused(id, date)) {
       throw new BadRequestException('Ese gasto fijo ya se causó este mes.');
     }
-    return this.createExpenseFromTemplate(tmpl, dto.amountCop, date, userId);
+    try {
+      return await this.createExpenseFromTemplate(tmpl, dto.amountCop, date, userId);
+    } catch (e) {
+      // Carrera (doble clic / 2 pestañas): el índice único frena el segundo.
+      if (isDuplicateMonth(e)) throw new BadRequestException('Ese gasto fijo ya se causó este mes.');
+      throw e;
+    }
   }
 
   /** Causa varios de una (omite los inexistentes o ya causados este mes). */
@@ -107,8 +123,13 @@ export class RecurringExpensesService {
     for (const item of dto.items) {
       const tmpl = tmap.get(item.recurringId);
       if (!tmpl || done.has(item.recurringId)) continue;
-      await this.createExpenseFromTemplate(tmpl, item.amountCop, date, userId);
-      created++;
+      done.add(item.recurringId); // no duplicar si el mismo id viene repetido en el request
+      try {
+        await this.createExpenseFromTemplate(tmpl, item.amountCop, date, userId);
+        created++;
+      } catch (e) {
+        if (!isDuplicateMonth(e)) throw e; // ya causado (carrera) → se omite
+      }
     }
     return { created };
   }
@@ -142,6 +163,7 @@ export class RecurringExpensesService {
         amountCop,
         supplierId,
         recurringId: tmpl.id,
+        causedMonth: monthKey(date),
         createdById: userId,
       },
     });

@@ -136,10 +136,21 @@ export class ExpensesService {
   }
 
   async update(id: string, dto: UpdateExpenseDto) {
-    await this.ensure(id);
+    const existing = await this.prisma.expense.findUnique({
+      where: { id },
+      select: { recurringId: true },
+    });
+    if (!existing) throw new NotFoundException('Gasto no encontrado');
+    // Un gasto causado desde un fijo no debe cambiar de categoría ni de fecha (rompería el
+    // candado por mes y los reportes); solo se ajustan monto/descripción/notas.
+    const locked = existing.recurringId != null;
     return this.prisma.expense.update({
       where: { id },
-      data: { ...dto, date: dto.date ? new Date(dto.date) : undefined },
+      data: {
+        ...dto,
+        category: locked ? undefined : dto.category,
+        date: locked ? undefined : dto.date ? new Date(dto.date) : undefined,
+      },
       include: withDetail,
     });
   }
@@ -173,10 +184,5 @@ export class ExpensesService {
       await tx.expense.delete({ where: { id } }); // borra los renglones en cascada
     });
     return { deleted: true };
-  }
-
-  private async ensure(id: string) {
-    const found = await this.prisma.expense.findUnique({ where: { id } });
-    if (!found) throw new NotFoundException('Gasto no encontrado');
   }
 }

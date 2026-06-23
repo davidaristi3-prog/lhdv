@@ -74,10 +74,10 @@ export class UpdateRecurringDto {
   active?: boolean;
 }
 
-/** Causar un gasto fijo: el monto se confirma/ajusta en el momento. */
+/** Causar un gasto fijo: el monto se confirma/ajusta en el momento (debe ser > 0). */
 export class CauseDto {
   @IsInt()
-  @Min(0)
+  @Min(1)
   amountCop!: number;
 
   @IsOptional()
@@ -90,7 +90,7 @@ export class CauseBatchItem {
   recurringId!: string;
 
   @IsInt()
-  @Min(0)
+  @Min(1)
   amountCop!: number;
 }
 

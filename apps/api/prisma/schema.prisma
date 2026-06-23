@@ -390,6 +390,7 @@ model Expense {
   invoiceNo   String? // N° de factura del proveedor (opcional)
   supplierId  String? // proveedor (opcional; las compras informales no tienen)
   recurringId String? // si se causó desde un gasto fijo (plantilla mensual)
+  causedMonth String? // 'YYYY-MM' del mes causado (solo gastos fijos) — backstop anti-duplicado
   createdById String?
   createdAt   DateTime        @default(now())
 
@@ -398,6 +399,7 @@ model Expense {
   recurring RecurringExpense? @relation(fields: [recurringId], references: [id])
   lines     ExpenseLine[]
 
+  @@unique([recurringId, causedMonth]) // un gasto fijo, una vez por mes (NULLs no chocan)
   @@index([date])
   @@index([category])
   @@index([supplierId])

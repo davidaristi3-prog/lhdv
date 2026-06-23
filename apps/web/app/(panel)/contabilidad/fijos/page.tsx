@@ -11,11 +11,18 @@ import type { ExpenseCategory, RecurringExpense } from '@/lib/types';
 const CATEGORIES = (Object.keys(EXPENSE_CATEGORY_LABEL) as ExpenseCategory[]).filter(
   (c) => c !== 'INGREDIENTS',
 );
-const today = () => new Date().toISOString().slice(0, 10);
+// Fecha local (no UTC): evita que en las noches de Colombia caiga al mes siguiente.
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export default function FijosPage() {
-  const { data: items, loading, error, reload } = useApi<RecurringExpense[]>('/recurring-expenses');
   const [date, setDate] = useState(today());
+  // La lista mira el MES de la fecha elegida (badge ✅ y anti-duplicado siempre coherentes).
+  const { data: items, loading, error, reload } = useApi<RecurringExpense[]>(
+    `/recurring-expenses?month=${date.slice(0, 7)}`,
+  );
   const [causeAmounts, setCauseAmounts] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
 
@@ -61,14 +68,29 @@ export default function FijosPage() {
   }
 
   async function patchTemplate(id: string, patch: Partial<RecurringExpense>) {
-    await api(`/recurring-expenses/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-    await reload();
+    try {
+      await api(`/recurring-expenses/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      // Si cambió el monto base, soltá el override local para que el campo de causar lo tome.
+      if (patch.amountCop !== undefined)
+        setCauseAmounts((m) => {
+          const n = { ...m };
+          delete n[id];
+          return n;
+        });
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
   }
   async function delTemplate(t: RecurringExpense) {
     if (!confirm(`¿Eliminar el gasto fijo "${t.description}"? Los gastos ya causados quedan en el historial.`))
       return;
-    await api(`/recurring-expenses/${t.id}`, { method: 'DELETE' });
-    await reload();
+    try {
+      await api(`/recurring-expenses/${t.id}`, { method: 'DELETE' });
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
   }
   async function causeOne(t: RecurringExpense) {
     setBusy(true);
@@ -76,6 +98,11 @@ export default function FijosPage() {
       await api(`/recurring-expenses/${t.id}/cause`, {
         method: 'POST',
         body: JSON.stringify({ amountCop: amountFor(t), date }),
+      });
+      setCauseAmounts((m) => {
+        const n = { ...m };
+        delete n[t.id];
+        return n;
       });
       await reload();
     } catch (e) {
@@ -85,13 +112,15 @@ export default function FijosPage() {
     }
   }
   async function causeAll() {
-    if (pending.length === 0) return;
+    const toCause = pending.filter((t) => amountFor(t) > 0);
+    if (toCause.length === 0) return;
     setBusy(true);
     try {
       await api('/recurring-expenses/cause-batch', {
         method: 'POST',
-        body: JSON.stringify({ date, items: pending.map((t) => ({ recurringId: t.id, amountCop: amountFor(t) })) }),
+        body: JSON.stringify({ date, items: toCause.map((t) => ({ recurringId: t.id, amountCop: amountFor(t) })) }),
       });
+      setCauseAmounts({});
       await reload();
     } catch (e) {
       alert((e as Error).message);
@@ -102,11 +131,15 @@ export default function FijosPage() {
   async function undo(t: RecurringExpense) {
     if (!t.causedExpense) return;
     if (!confirm(`¿Deshacer el gasto de "${t.description}" de este mes?`)) return;
-    await api(`/expenses/${t.causedExpense.id}`, { method: 'DELETE' });
-    await reload();
+    try {
+      await api(`/expenses/${t.causedExpense.id}`, { method: 'DELETE' });
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
   }
 
-  const monthLabel = new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date(`${date}T12:00:00`).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
   const field = 'rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
   const cellInput = 'w-full rounded-md border border-transparent px-2 py-1 text-sm outline-none hover:border-neutral-200 focus:border-neutral-900';
 
@@ -124,7 +157,7 @@ export default function FijosPage() {
         </label>
         <button
           onClick={causeAll}
-          disabled={busy || pending.length === 0}
+          disabled={busy || pending.filter((t) => amountFor(t) > 0).length === 0}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
         >
           ⚡ Causar todos los pendientes ({pending.length})
@@ -219,7 +252,7 @@ export default function FijosPage() {
                         />
                         <button
                           onClick={() => causeOne(t)}
-                          disabled={busy}
+                          disabled={busy || !amountFor(t)}
                           className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
                         >
                           Causar
