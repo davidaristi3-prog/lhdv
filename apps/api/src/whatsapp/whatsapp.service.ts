@@ -77,9 +77,62 @@ export class WhatsappService {
     const buf = raw ?? Buffer.from(JSON.stringify(payload ?? {}));
     return 'sha256:' + createHash('sha256').update(buf).digest('hex');
   }
+
+  /**
+   * Extrae los mensajes ENTRANTES (de clientes) de un payload de webhook de Meta.
+   * Ignora los eventos de estado (delivered/read), que se manejan aparte.
+   */
+  extractInboundMessages(payload: unknown): InboundMessage[] {
+    const entries = (payload as { entry?: WaEntry[] })?.entry ?? [];
+    const out: InboundMessage[] = [];
+    for (const entry of entries) {
+      for (const change of entry?.changes ?? []) {
+        const value = change?.value;
+        const contactName = value?.contacts?.[0]?.profile?.name ?? null;
+        for (const m of value?.messages ?? []) {
+          if (!m.id || !m.from) continue;
+          const text =
+            m.type === 'text'
+              ? (m.text?.body ?? null)
+              : ((m as Record<string, { caption?: string }>)[m.type ?? '']?.caption ?? null);
+          out.push({
+            from: m.from,
+            wamId: m.id,
+            type: m.type ?? 'unknown',
+            text,
+            contactName,
+            raw: m,
+          });
+        }
+      }
+    }
+    return out;
+  }
+}
+
+export interface InboundMessage {
+  from: string; // teléfono del cliente en formato Meta (E.164 sin +)
+  wamId: string; // id único del mensaje de WhatsApp (para deduplicar)
+  type: string; // text, image, audio, interactive, …
+  text: string | null; // cuerpo si es texto, o caption si trae
+  contactName: string | null; // nombre del perfil de WhatsApp, si viene
+  raw: unknown;
 }
 
 interface WhatsappValue {
   messages?: { id?: string }[];
   statuses?: { id?: string }[];
+}
+interface WaEntry {
+  changes?: { value?: WaValue }[];
+}
+interface WaValue {
+  contacts?: { profile?: { name?: string } }[];
+  messages?: WaMessage[];
+}
+interface WaMessage {
+  id?: string;
+  from?: string;
+  type?: string;
+  text?: { body?: string };
 }
