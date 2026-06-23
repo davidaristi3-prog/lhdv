@@ -110,19 +110,44 @@ function GoogleLiveMap({ routes, height = 440 }: Props) {
             key={`${r.id}-c`}
             position={r.courier as { lat: number; lng: number }}
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-            getPixelPositionOffset={offsetCenter}
+            getPixelPositionOffset={(w) => ({ x: -(w / 2), y: -22 })}
           >
             <div
               title={`🛵 ${r.courierName}`}
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                background: r.color,
-                border: '3px solid #fff',
-                boxShadow: `0 0 0 4px ${r.color}55, 0 1px 5px rgba(0,0,0,.6)`,
-              }}
-            />
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+            >
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '50%',
+                  background: r.color,
+                  border: '3px solid #fff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,.55)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 24,
+                }}
+              >
+                🛵
+              </div>
+              <div
+                style={{
+                  marginTop: 3,
+                  padding: '1px 7px',
+                  borderRadius: 9,
+                  background: r.color,
+                  color: '#fff',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 1px 3px rgba(0,0,0,.4)',
+                }}
+              >
+                {r.courierName}
+              </div>
+            </div>
           </OverlayView>
         ))}
     </GoogleMap>
@@ -176,9 +201,9 @@ function LeafletLiveMap({ routes, height = 440 }: Props) {
       if (r.courier) {
         const icon = L.divIcon({
           className: '',
-          html: `<div style="position:relative;width:20px;height:20px"><div style="position:absolute;inset:0;background:${r.color};border-radius:50%;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.6)"></div><div style="position:absolute;inset:-6px;border:2px solid ${r.color};border-radius:50%;opacity:.4"></div></div>`,
-          iconSize: [20, 20],
-          iconAnchor: [10, 10],
+          html: `<div style="display:flex;flex-direction:column;align-items:center"><div style="width:44px;height:44px;border-radius:50%;background:${r.color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:24px">🛵</div><div style="margin-top:3px;padding:1px 7px;border-radius:9px;background:${r.color};color:#fff;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.4)">${r.courierName}</div></div>`,
+          iconSize: [80, 66],
+          iconAnchor: [40, 22],
         });
         L.marker([r.courier.lat, r.courier.lng], { icon })
           .bindPopup(`🛵 <b>${r.courierName}</b><br/>ubicación actual`)
