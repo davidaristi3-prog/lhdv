@@ -307,28 +307,62 @@ export default function CocinaPage() {
             const cards = orders.filter((o) => o.status === col);
             const soon = cards.filter((o) => !isLater(o));
             const later = cards.filter(isLater);
+            const twoCol = col === 'READY' && cards.length > 4;
+            // En modo 2 columnas: primeras 8 tarjetas en grid, el resto scrolleable abajo.
+            const above = twoCol ? cards.slice(0, 8) : cards;
+            const below = twoCol ? cards.slice(8) : [];
+            const aboveSoon = above.filter((o) => !isLater(o));
+            const aboveLater = above.filter(isLater);
             return (
-              <div key={col} className="rounded-xl bg-neutral-50 p-3 ring-1 ring-neutral-200">
+              <div
+                key={col}
+                className={`rounded-xl bg-neutral-50 p-3 ring-1 ring-neutral-200 ${twoCol ? 'xl:col-span-2' : ''}`}
+              >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <h2 className="text-sm font-semibold text-neutral-700">{STATUS_LABEL[col]}</h2>
                   <span className="rounded-full bg-white px-2 py-0.5 text-xs text-neutral-500 ring-1 ring-neutral-200">
                     {cards.length}
                   </span>
                 </div>
-                <div className="space-y-2">
-                  {soon.map((o) => renderCard(o, false))}
-                  {later.length > 0 && (
-                    <div className="flex items-center gap-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                      <span className="h-px flex-1 bg-neutral-200" />
-                      Para más adelante
-                      <span className="h-px flex-1 bg-neutral-200" />
+                {twoCol ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      {aboveSoon.map((o) => renderCard(o, false))}
                     </div>
-                  )}
-                  {later.map((o) => renderCard(o, true))}
-                  {cards.length === 0 && (
-                    <p className="px-1 py-4 text-center text-xs text-neutral-400">Sin pedidos</p>
-                  )}
-                </div>
+                    {aboveLater.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                          <span className="h-px flex-1 bg-neutral-200" />
+                          Para más adelante
+                          <span className="h-px flex-1 bg-neutral-200" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {aboveLater.map((o) => renderCard(o, true))}
+                        </div>
+                      </>
+                    )}
+                    {below.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {below.map((o) => renderCard(o, isLater(o)))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    {soon.map((o) => renderCard(o, false))}
+                    {later.length > 0 && (
+                      <div className="flex items-center gap-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                        <span className="h-px flex-1 bg-neutral-200" />
+                        Para más adelante
+                        <span className="h-px flex-1 bg-neutral-200" />
+                      </div>
+                    )}
+                    {later.map((o) => renderCard(o, true))}
+                    {cards.length === 0 && (
+                      <p className="px-1 py-4 text-center text-xs text-neutral-400">Sin pedidos</p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
