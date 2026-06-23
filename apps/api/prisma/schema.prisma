@@ -389,16 +389,35 @@ model Expense {
   notes       String?
   invoiceNo   String? // N° de factura del proveedor (opcional)
   supplierId  String? // proveedor (opcional; las compras informales no tienen)
+  recurringId String? // si se causó desde un gasto fijo (plantilla mensual)
   createdById String?
   createdAt   DateTime        @default(now())
 
-  createdBy User?         @relation(fields: [createdById], references: [id])
-  supplier  Supplier?     @relation(fields: [supplierId], references: [id])
+  createdBy User?             @relation(fields: [createdById], references: [id])
+  supplier  Supplier?         @relation(fields: [supplierId], references: [id])
+  recurring RecurringExpense? @relation(fields: [recurringId], references: [id])
   lines     ExpenseLine[]
 
   @@index([date])
   @@index([category])
   @@index([supplierId])
+  @@index([recurringId])
+}
+
+// Gasto fijo mensual (arriendo, nómina, internet…). Plantilla que se "causa" con
+// 1 clic cada mes; el monto se confirma/ajusta en el momento y crea un Expense real.
+model RecurringExpense {
+  id           String          @id @default(cuid())
+  description  String
+  category     ExpenseCategory
+  amountCop    Int // monto típico (se puede ajustar al causar)
+  supplierName String? // a quién se le paga (opcional)
+  dayOfMonth   Int? // día de pago típico (informativo)
+  notes        String?
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+
+  expenses Expense[]
 }
 
 // Directorio simple de proveedores. Se crea al vuelo desde el formulario de compra.

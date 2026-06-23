@@ -169,6 +169,19 @@ export interface Expense {
   lines?: ExpenseLine[]; // si trae renglones, es una compra de insumos
 }
 
+export interface RecurringExpense {
+  id: string;
+  description: string;
+  category: ExpenseCategory;
+  amountCop: number;
+  supplierName: string | null;
+  dayOfMonth: number | null;
+  notes: string | null;
+  active: boolean;
+  causedThisMonth: boolean;
+  causedExpense: { id: string; amountCop: number; date: string } | null;
+}
+
 export interface Ingredient {
   id: string;
   name: string;

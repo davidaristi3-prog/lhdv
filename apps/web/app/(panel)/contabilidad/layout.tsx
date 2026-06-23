@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const TABS = [
   { href: '/contabilidad', label: 'Resumen' },
   { href: '/contabilidad/gastos', label: 'Gastos y compras' },
+  { href: '/contabilidad/fijos', label: 'Gastos fijos' },
   { href: '/contabilidad/costeo', label: 'Costeo' },
 ];
 
