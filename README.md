@@ -7,7 +7,7 @@ Monorepo del sistema de pedidos. Ver la hoja de ruta en [PLAN.md](PLAN.md).
 - **Backend / worker:** NestJS + Prisma (`apps/api`)
 - **Panel web:** Next.js 15 + React 19 + Tailwind v4 (`apps/web`)
 - **Lógica compartida:** máquina de estados del pedido + dinero (`packages/shared`)
-- **Base de datos:** PostgreSQL (Neon) · **Cola:** Redis (BullMQ, Fase 2) · **Gestor:** pnpm
+- **Base de datos:** PostgreSQL (Neon / Supabase) · **Cola:** Redis/Upstash (Fase 2) · **Gestor:** pnpm
 
 ## Estructura
 
@@ -24,7 +24,6 @@ LHDV/
 │        └─ prisma/         # PrismaService (conexión)
 ├─ packages/
 │  └─ shared/           # order-status.ts (transiciones) · money.ts (COP)
-├─ docker-compose.yml   # Postgres + Redis locales
 └─ PLAN.md              # hoja de ruta por fases
 ```
 
@@ -66,20 +65,11 @@ El seed crea un usuario por rol. Contraseña: **`lhdv1234`**
 | Ventas | ventas@lahoradelvenado.co |
 | Domicilios | domicilios@lahoradelvenado.co |
 
-### Base de datos — opción A: Docker (local)
+### Base de datos — Postgres en la nube
 
-Requiere Docker Desktop.
-
-```bash
-docker compose up -d        # levanta Postgres y Redis
-# En .env, dejá la DATABASE_URL de la "Opción A" (ya viene por defecto)
-```
-
-### Base de datos — opción B: Postgres en la nube (sin instalar nada)
-
-Si no querés instalar Docker, creá una base gratis en **Neon** (https://neon.tech)
-o **Supabase**, copiá la cadena de conexión y pegala en `DATABASE_URL` (opción B
-del `.env.example`). Para Redis (Fase 2 en adelante) podés usar **Upstash**.
+Creá una base gratis en **Neon** (https://neon.tech) o **Supabase**, copiá la
+cadena de conexión y pegala en `DATABASE_URL` del `.env`. Para Redis (Fase 2)
+se usará **Upstash**.
 
 ## Scripts útiles
 

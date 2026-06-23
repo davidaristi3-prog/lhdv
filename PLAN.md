@@ -22,7 +22,7 @@
 - Verificación del negocio y alta de la **WhatsApp Business API** con Meta (trámite que toma días; mejor empezarlo ya).
 - **Decisión del número de WhatsApp** *(NUEVO)*: migrar el número actual a la API implica **perder la app normal de WhatsApp en ese número** (no se pueden usar las dos a la vez). Decidir: ¿se migra el número que ya conocen los clientes, o se saca uno nuevo? Esto bloquea la verificación con Meta.
 - **Plantillas de mensajes de Meta** *(NUEVO, adelantado desde Fase 4)*: empezar a redactar y enviar a aprobación las plantillas para mensajes proactivos (listo, recordatorio, confirmación). La aprobación toma días y la ventana de 24 h las hace obligatorias.
-- Provisión de infraestructura: repositorio, base de datos (PostgreSQL), hosting, cola (Redis).
+- Provisión de infraestructura: repositorio, base de datos (PostgreSQL en Neon/Supabase), hosting, cola (Redis/Upstash en Fase 2).
 - Modelo de datos definitivo y **máquina de estados del pedido**, con **idempotencia de webhooks** desde el diseño (WhatsApp y Wompi reenvían eventos → no duplicar pedidos ni pagos).
 - Carga del **catálogo** en la base (productos, presentaciones, precios, adiciones).
 - **Definir la frontera "pedido estándar vs. personalizado"** *(NUEVO)*: qué cierra el bot solo y qué se deriva siempre a una persona (p. ej. tortas con letras/diseños). Esta línea determina la cobertura real de la Fase 2.
@@ -177,7 +177,7 @@
 - **Consignación Bancolombia**: difícil de verificar automáticamente; la ruta limpia es Wompi.
 - **Rappi**: confirmar si se integra por API en Fase 5 o se maneja manual al inicio.
 - **Habeas Data (Ley 1581)** *(NUEVO)*: consentimiento de tratamiento de datos y manejo del historial de chat.
-- **Stack**: a definir (sugerido: Node/NestJS o Python/FastAPI + PostgreSQL + Redis + Next.js).
+- **Stack**: Node/NestJS + PostgreSQL (Neon) + Redis/Upstash (Fase 2) + Next.js.
 
 ---
 
