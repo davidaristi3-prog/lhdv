@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "start:dev": "dotenv -e ../../.env -- tsx watch src/main.ts",
+    "start:dev": "dotenv -e ../../.env -- ts-node --transpile-only src/main.ts",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "generate": "prisma generate",
     "migrate": "dotenv -e ../../.env -- prisma migrate dev",
@@ -39,6 +39,7 @@
     "@types/node": "^22.10.0",
     "dotenv-cli": "^11.0.0",
     "prisma": "^6.2.0",
+    "ts-node": "^10.9.2",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "xlsx": "^0.18.5"

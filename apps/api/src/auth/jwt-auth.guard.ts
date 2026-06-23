@@ -13,10 +13,9 @@ import { JwtPayload } from './jwt-payload.interface';
 /** Verifica el Bearer token en cada request, salvo en rutas marcadas @Public(). */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(
-    private readonly jwt: JwtService,
-    private readonly reflector: Reflector,
-  ) {}
+  private readonly reflector = new Reflector();
+
+  constructor(private readonly jwt: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [

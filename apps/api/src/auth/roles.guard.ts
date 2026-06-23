@@ -13,7 +13,9 @@ import { JwtPayload } from './jwt-payload.interface';
 /** Aplica el control por rol declarado con @Roles(). Corre después de JwtAuthGuard. */
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  private readonly reflector = new Reflector();
+
+  constructor() {}
 
   canActivate(context: ExecutionContext): boolean {
     const required = this.reflector.getAllAndOverride<UserRole[] | undefined>(ROLES_KEY, [
