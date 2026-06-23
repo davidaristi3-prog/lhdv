@@ -45,10 +45,21 @@ export default function PedidoDetallePage() {
 
   // Genera (o reabre) la cuenta de cobro de este pedido y la muestra lista para imprimir.
   async function generarCuenta() {
+    // Si el cliente no tiene CC/NIT cargado, lo pedimos acá para poder emitir la cuenta
+    // (y queda guardado en su ficha para la próxima).
+    let taxId: string | undefined;
+    if (!order?.customer.taxId) {
+      const v = window.prompt('CC o NIT del cliente (para la cuenta de cobro):', '');
+      if (v == null || !v.trim()) return; // canceló o lo dejó vacío
+      taxId = v.trim();
+    }
     setBusy(true);
     setActionError(null);
     try {
-      const invoice = await api<{ id: string }>(`/invoices/from-order/${params.id}`, { method: 'POST' });
+      const invoice = await api<{ id: string }>(`/invoices/from-order/${params.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ taxId }),
+      });
       router.push(`/cuentas-cobro/${invoice.id}`);
     } catch (e) {
       setActionError((e as Error).message);

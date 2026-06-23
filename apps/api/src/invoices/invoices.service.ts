@@ -39,7 +39,7 @@ export class InvoicesService {
    * Genera (o devuelve) la cuenta de cobro de un pedido. Guarda snapshots del cliente y
    * los renglones, y toma el consecutivo de la configuración (que arranca donde se fije).
    */
-  async createFromOrder(orderId: string, userId: string) {
+  async createFromOrder(orderId: string, userId: string, taxId?: string) {
     const existing = await this.prisma.invoice.findFirst({ where: { orderId } });
     if (existing) return existing;
 
@@ -51,7 +51,16 @@ export class InvoicesService {
     if (!order.customer.name) {
       throw new BadRequestException('El cliente necesita un nombre para la cuenta de cobro');
     }
-    if (!order.customer.taxId) {
+    // Si el cliente no tiene CC/NIT pero se manda uno al generar la cuenta, se guarda en su ficha.
+    let customerTaxId = order.customer.taxId;
+    if (!customerTaxId && taxId?.trim()) {
+      customerTaxId = taxId.trim();
+      await this.prisma.customer.update({
+        where: { id: order.customerId },
+        data: { taxId: customerTaxId },
+      });
+    }
+    if (!customerTaxId) {
       throw new BadRequestException('El cliente necesita CC o NIT para la cuenta de cobro');
     }
 
@@ -71,7 +80,7 @@ export class InvoicesService {
           number,
           orderId,
           customerName: order.customer.name!,
-          customerTaxId: order.customer.taxId,
+          customerTaxId,
           customerAddress: order.deliveryAddress ?? null,
           customerPhone: order.customer.whatsappPhone,
           items,

@@ -53,26 +53,36 @@ export default function CocinaPage() {
   const [bajaFor, setBajaFor] = useState<Order | null>(null);
   const [motivoBaja, setMotivoBaja] = useState('');
   const [fotoBaja, setFotoBaja] = useState<File | null>(null);
+  const [danados, setDanados] = useState<Record<string, number>>({});
   const faltantes = (stock.data ?? []).filter((r) => r.parStock > 0 && r.readyStock < r.parStock);
 
-  // Baja de producto con evidencia: motivo (obligatorio) + foto opcional.
+  // Baja parcial: cuántas unidades de cada producto se dañaron (se rehacen) + motivo + foto.
   async function darDeBaja() {
     if (!bajaFor || !motivoBaja.trim()) return;
+    const items = Object.entries(danados)
+      .filter(([, q]) => q > 0)
+      .map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
+    if (items.length === 0) return;
     setBusyId(bajaFor.id);
     try {
       const fd = new FormData();
+      fd.append('items', JSON.stringify(items));
       fd.append('reason', motivoBaja.trim());
       if (fotoBaja) fd.append('photo', fotoBaja);
       const token = getToken();
-      const res = await fetch(`${API_BASE}/orders/${bajaFor.id}/scrap`, {
+      const res = await fetch(`${API_BASE}/orders/${bajaFor.id}/scrap-items`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
       });
-      if (!res.ok) throw new Error('No se pudo dar de baja');
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(b.message ?? 'No se pudo dar de baja');
+      }
       setBajaFor(null);
       setMotivoBaja('');
       setFotoBaja(null);
+      setDanados({});
       await reload();
     } catch (e) {
       alert((e as Error).message);
@@ -213,6 +223,7 @@ export default function CocinaPage() {
                     setBajaFor(o);
                     setMotivoBaja('');
                     setFotoBaja(null);
+                    setDanados({});
                   }}
                   disabled={busyId === o.id}
                   className="rounded-md border border-red-200 px-1.5 text-[10px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
@@ -331,11 +342,35 @@ export default function CocinaPage() {
           onClick={() => setBajaFor(null)}
         >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-base font-semibold text-red-700">Dar de baja · {bajaFor.code}</h2>
+            <h2 className="text-base font-semibold text-red-700">Dar de baja dañados · {bajaFor.code}</h2>
             <p className="mt-1 text-sm text-neutral-500">
-              Vuelve a Confirmado para rehacerlo; los insumos usados no se reponen (merma).
+              Indicá cuántas unidades de cada producto se dañaron. Se rehacen (los insumos
+              gastados quedan como merma) y el pedido sigue para entregar completo.
             </p>
             <div className="mt-4 space-y-3">
+              <div className="space-y-2">
+                {bajaFor.items.map((it) => (
+                  <div key={it.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">
+                      {it.variant.product.name} · {it.variant.name}
+                      <span className="text-neutral-400"> (de {it.quantity})</span>
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={it.quantity}
+                      value={danados[it.id] ?? 0}
+                      onChange={(e) =>
+                        setDanados((d) => ({
+                          ...d,
+                          [it.id]: Math.max(0, Math.min(it.quantity, Number(e.target.value) || 0)),
+                        }))
+                      }
+                      className="w-16 rounded-lg border border-neutral-300 px-2 py-1 text-center text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">¿Qué pasó? *</label>
                 <textarea
@@ -369,10 +404,14 @@ export default function CocinaPage() {
               </button>
               <button
                 onClick={darDeBaja}
-                disabled={!motivoBaja.trim() || busyId === bajaFor.id}
+                disabled={
+                  !motivoBaja.trim() ||
+                  busyId === bajaFor.id ||
+                  Object.values(danados).every((q) => !q)
+                }
                 className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40"
               >
-                {busyId === bajaFor.id ? 'Guardando…' : 'Dar de baja'}
+                {busyId === bajaFor.id ? 'Guardando…' : 'Dar de baja y rehacer'}
               </button>
             </div>
           </div>

@@ -22,10 +22,13 @@ export default function RutaDetallePage() {
   const [busy, setBusy] = useState(false);
   const [toAdd, setToAdd] = useState<Set<string>>(new Set());
 
+  // Se refresca solo SOLO mientras la ruta está en curso (para ver la ubicación del
+  // domiciliario en vivo). En borrador/completada no, así no interrumpe mientras se arma.
   useEffect(() => {
-    const t = setInterval(() => void reload(), 12000); // ubicación en vivo
+    if (route?.status !== 'IN_PROGRESS') return;
+    const t = setInterval(() => void reload(), 12000);
     return () => clearInterval(t);
-  }, [reload]);
+  }, [reload, route?.status]);
 
   async function action(path: string) {
     setBusy(true);

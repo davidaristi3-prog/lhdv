@@ -525,6 +525,83 @@ export class OrdersService {
     return allFromStock;
   }
 
+  /**
+   * Baja PARCIAL en producción: algunas unidades de productos de un pedido se dañaron y se
+   * REHACEN. Por cada producto dañado descuenta los insumos de su receta × cantidad dañada
+   * (para producir el reemplazo) y deja constancia de la merma con motivo/foto. El pedido
+   * sigue en producción y al terminar entrega la cantidad completa.
+   */
+  async scrapItems(
+    orderId: string,
+    damaged: { orderItemId: string; quantity: number }[],
+    opts: { userId: string; reason: string; photoPath?: string },
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId }, select: { status: true } });
+      if (!order) throw new NotFoundException('Pedido no encontrado');
+      if (order.status !== 'IN_PRODUCTION') {
+        throw new BadRequestException('Solo se da de baja productos de un pedido en producción');
+      }
+      let total = 0;
+      const detalle: string[] = [];
+      for (const d of damaged) {
+        if (!d.quantity || d.quantity < 1) continue;
+        const item = await tx.orderItem.findUnique({
+          where: { id: d.orderItemId },
+          select: {
+            orderId: true,
+            quantity: true,
+            productVariantId: true,
+            variant: { select: { name: true, product: { select: { name: true } } } },
+          },
+        });
+        if (!item || item.orderId !== orderId) {
+          throw new BadRequestException('Un producto no pertenece a este pedido');
+        }
+        if (d.quantity > item.quantity) {
+          throw new BadRequestException('La cantidad dañada supera la del pedido');
+        }
+        total += d.quantity;
+        detalle.push(`${d.quantity}× ${item.variant.product.name} ${item.variant.name}`);
+        // Rehacer: descuenta los insumos de la receta × cantidad dañada (para el reemplazo).
+        const recipe = await tx.recipeItem.findMany({
+          where: { productVariantId: item.productVariantId },
+          select: { ingredientId: true, quantity: true },
+        });
+        for (const r of recipe) {
+          await tx.ingredient.update({
+            where: { id: r.ingredientId },
+            data: { stockQty: { decrement: r.quantity * d.quantity } },
+          });
+        }
+        if (recipe.length > 0) {
+          await tx.inventoryMovement.createMany({
+            data: recipe.map((r) => ({
+              ingredientId: r.ingredientId,
+              type: 'CONSUMPTION' as const,
+              quantity: r.quantity * d.quantity,
+              orderId,
+              reason: `Rehacer dañado: ${d.quantity}× ${item.variant.product.name}`,
+              createdById: opts.userId,
+            })),
+          });
+        }
+      }
+      if (total === 0) throw new BadRequestException('Indicá cuántas unidades se dañaron');
+      // Deja constancia de la merma en el historial (no cambia el estado: sigue en producción).
+      await tx.orderStatusEvent.create({
+        data: {
+          orderId,
+          toStatus: 'IN_PRODUCTION',
+          byUserId: opts.userId,
+          reason: `Baja parcial (${detalle.join(', ')}) — ${opts.reason}`,
+          photoPath: opts.photoPath ?? null,
+        },
+      });
+      return tx.order.findUnique({ where: { id: orderId }, include: this.fullInclude() });
+    });
+  }
+
   /** Descarta (elimina) un borrador. Solo DRAFT, que no tocó nada; la cascada borra items y eventos. */
   async deleteDraft(orderId: string) {
     const order = await this.prisma.order.findUnique({

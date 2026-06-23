@@ -107,6 +107,34 @@ export class OrdersController {
     });
   }
 
+  /** Baja PARCIAL: rehace solo las unidades dañadas de un pedido en producción.
+   *  Body: items (JSON [{orderItemId, quantity}]) + reason + foto opcional. */
+  @Post(':id/scrap-items')
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: diskStorage({
+        destination: UPLOADS_DIR,
+        filename: (_req, file, cb) =>
+          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname) || '.jpg'}`),
+      }),
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  scrapItems(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('items') itemsJson: string,
+    @Body('reason') reason: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const damaged = JSON.parse(itemsJson || '[]') as { orderItemId: string; quantity: number }[];
+    return this.orders.scrapItems(id, damaged, {
+      userId: user.sub,
+      reason: reason || 'Baja parcial',
+      photoPath: file ? `/uploads/${file.filename}` : undefined,
+    });
+  }
+
   @Roles(UserRole.OWNER, UserRole.SALES)
   @Delete(':id')
   remove(@Param('id') id: string) {

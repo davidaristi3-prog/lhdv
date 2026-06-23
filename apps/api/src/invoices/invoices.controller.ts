@@ -33,7 +33,11 @@ export class InvoicesController {
   }
 
   @Post('from-order/:orderId')
-  createFromOrder(@Param('orderId') orderId: string, @CurrentUser() user: JwtPayload) {
-    return this.invoices.createFromOrder(orderId, user.sub);
+  createFromOrder(
+    @Param('orderId') orderId: string,
+    @Body() body: { taxId?: string },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.invoices.createFromOrder(orderId, user.sub, body?.taxId);
   }
 }

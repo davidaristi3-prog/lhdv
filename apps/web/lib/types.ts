@@ -37,6 +37,7 @@ export interface CustomerLite {
   id: string;
   name: string | null;
   whatsappPhone: string;
+  taxId?: string | null;
 }
 
 export interface CustomerAddress {
